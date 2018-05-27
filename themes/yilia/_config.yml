@@ -8,8 +8,8 @@ menu:
 subnav:
   github: "https://github.com/chyi0425"
   weibo: "https://weibo.com/chyi0425"
-  rss: "#"
-  zhihu: "#"
+  #rss: "#"
+  #zhihu: "#"
   #qq: "#"
   #weixin: "#"
   #jianshu: "#"
