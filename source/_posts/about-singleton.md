@@ -2,6 +2,7 @@
 title: 谈谈单例模式
 date: 2018-05-16 16:35:17
 categories: tools #文章文类
+toc: true
 tags: [Java,Design Patterns] #文章标签，多于一项时用这种格式
 ---
 关于单例，一般来说Java有如下实现模式
