@@ -598,3 +598,10 @@ private final boolean parkAndCheckInterrupt() {
 1. 锁状态。我们要知道是不是被别的线程占有了，这个就是state的作用，为0的时候表示没有线程占有锁，用CAS将state设为1，如果CAS成功，说明抢到了锁，这样其他线程就抢不到了，如果锁重入的话，state进行+1 就可以，解锁就是减 1，直到 state 又变为 0，代表释放锁，所以 lock() 和 unlock() 必须要配对啊。然后唤醒等待队列中的第一个线程，让其来占有锁。
 2. 线程的阻塞和解除阻塞。AQS中采用了LockSupport.park(thread) 来挂起线程，用 unpark 来唤醒线程。
 3. 阻塞队列。因为争抢锁的线程可能很多，但是只有一个线程能拿到锁，其他的线程都必须等待，这个时候就需要一个queue来管理这些锁，AQS 用的是一个 FIFO 的队列，就是一个链表，每个 node 都持有后继节点的引用。
+
+最后自己整理了lock的xmind图
+http://naotu.baidu.com/file/6fae44361ac80b5429fdf1a40b0c4de2?token=e35a37d6d08f12a8
+
+![示意图](/img/aqs-1.png)
+![示意图](/img/aqs-2.png)
+![示意图](/img/aqs-3.png)
