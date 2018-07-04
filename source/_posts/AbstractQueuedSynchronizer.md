@@ -2,6 +2,7 @@
 title: AbstractQueuedSynchronizer
 date: 2018-06-20 10:05:41
 tags: [Java,concurrency] #文章标签，多于一项时用这种格式
+toc: true
 ---
 ## AQS结构
 

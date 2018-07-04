@@ -2,6 +2,7 @@
 title: AQS-condition
 date: 2018-06-30 12:27:15
 tags: [Java,concurrency] #文章标签，多于一项时用这种格式
+toc: true
 ---
 
 ## Condition
@@ -385,3 +386,29 @@ public final boolean await(long time, TimeUnit unit)
 超时的思路还是很简单的，不带超时参数的 await 是 park，然后等待别人唤醒。而现在就是调用 parkNanos 方法来休眠指定的时间，醒来后判断是否 signal 调用了，调用了就是没有超时，否则就是超时了。超时的话，自己来进行转移到阻塞队列，然后抢锁。
 
 ### 不抛出 InterruptedException 的 await
+```Java
+        /**
+         * Implements uninterruptible condition wait.
+         * <ol>
+         * <li> Save lock state returned by {@link #getState}.
+         * <li> Invoke {@link #release} with saved state as argument,
+         *      throwing IllegalMonitorStateException if it fails.
+         * <li> Block until signalled.
+         * <li> Reacquire by invoking specialized version of
+         *      {@link #acquire} with saved state as argument.
+         * </ol>
+         */
+        public final void awaitUninterruptibly() {
+            Node node = addConditionWaiter();
+            int savedState = fullyRelease(node);
+            boolean interrupted = false;
+            while (!isOnSyncQueue(node)) {
+                LockSupport.park(this);
+                if (Thread.interrupted())
+                    interrupted = true;
+            }
+            if (acquireQueued(node, savedState) || interrupted)
+                selfInterrupt();
+        }
+
+```
