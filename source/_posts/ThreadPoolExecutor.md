@@ -333,3 +333,189 @@ public void execute(Runnable command) {
             reject(command);
     }
 ```
+
+addWorker(Runnable firstTask, boolean core) 方法，我们看看它是怎么创建新的线程的：
+```Java
+    // 第一个参数是准备提交给这个线程执行的任务，可以为 null
+    // 第二个参数为 true 代表使用核心线程数 corePoolSize 作为创建线程的界线，也就说创建这个线程的时候
+    // 如果线程池中的线程总数已经达到 corePoolSize，那么不能响应这次创建线程的请求
+    // 如果是 false，代表使用最大线程数 maximumPoolSize 作为界线
+    private boolean addWorker(Runnable firstTask, boolean core) {
+        retry:
+        for (;;) {
+            int c = ctl.get();
+            int rs = runStateOf(c);
+
+            // Check if queue empty only if necessary.
+            // 满足以下条件之一，不创建新的worker
+            // 1. 线程池>SHUTDOWN(STOP, TIDYING, 或 TERMINATED)
+            // 2. firstTask != null
+            // 3. workQueue.isEmpty()
+            // 还是状态控制的问题，当线程池处于 SHUTDOWN 的时候，不允许提交任务，但是已有的任务继续执行
+            // 当状态大于 SHUTDOWN 时，不允许提交任务，且中断正在执行的任务
+            // 如果线程池处于 SHUTDOWN，但是 firstTask 为 null，且 workQueue 非空，那么是允许创建 worker 的
+            if (rs >= SHUTDOWN &&
+                ! (rs == SHUTDOWN &&
+                   firstTask == null &&
+                   ! workQueue.isEmpty()))
+                return false;
+
+            for (;;) {
+                int wc = workerCountOf(c);
+                if (wc >= CAPACITY ||
+                    wc >= (core ? corePoolSize : maximumPoolSize))
+                    return false;
+                // 如果成功，那么就是所有创建线程前的条件校验都满足了，准备创建线程执行任务了
+                // 这里失败的话，说明有其他线程也在尝试往线程池中创建线程
+                if (compareAndIncrementWorkerCount(c))
+                    break retry;
+                // 由于有并发，重新再读取一下 ctl
+                c = ctl.get();  // Re-read ctl
+                // 正常如果是 CAS 失败的话，进到下一个里层的for循环就可以了
+                // 可是如果是因为其他线程的操作，导致线程池的状态发生了变更，如有其他线程关闭了这个线程池
+                // 那么需要回到外层的for循环
+                if (runStateOf(c) != rs)
+                    continue retry;
+                // else CAS failed due to workerCount change; retry inner loop
+            }
+        }
+        //到这里，我们认为在当前这个时刻，可以开始创建线程来执行任务了
+
+        // worker 是否已经启动
+        boolean workerStarted = false;
+        // 是否已将这个 worker 添加到 workers 这个 HashSet 中
+        boolean workerAdded = false;
+        Worker w = null;
+        try {
+            w = new Worker(firstTask);
+            // 取 worker 中的线程对象
+            final Thread t = w.thread;
+            if (t != null) {
+                // 这个是整个类的全局锁，持有这个锁才能让下面的操作“顺理成章”，
+                // 因为关闭一个线程池需要这个锁，至少我持有锁的期间，线程池不会被关闭
+                final ReentrantLock mainLock = this.mainLock;
+                mainLock.lock();
+                try {
+                    // Recheck while holding lock.
+                    // Back out on ThreadFactory failure or if
+                    // shut down before lock acquired.
+                    int rs = runStateOf(ctl.get());
+                   // 小于 SHUTTDOWN 那就是 RUNNING，这个自不必说，是最正常的情况
+                   // 如果等于 SHUTDOWN，前面说了，不接受新的任务，但是会继续执行等待队列中的任务
+                    if (rs < SHUTDOWN ||
+                        (rs == SHUTDOWN && firstTask == null)) {
+                        // worker 里面的 thread 不能是已经启动的
+                        if (t.isAlive()) // precheck that t is startable
+                            throw new IllegalThreadStateException();
+                        // 加到 workers 这个 HashSet 中
+                        workers.add(w);
+                        int s = workers.size();
+                        // largestPoolSize 用于记录 workers 中的个数的最大值
+                        // 因为 workers 是不断增加减少的，通过这个值可以知道线程池的大小曾经达到的最大值
+                        if (s > largestPoolSize)
+                            largestPoolSize = s;
+                        workerAdded = true;
+                    }
+                } finally {
+                    mainLock.unlock();
+                }
+                // 添加成功的话，启动这个线程
+                if (workerAdded) {
+                    t.start();
+                    workerStarted = true;
+                }
+            }
+        } finally {
+            if (! workerStarted)
+                // 如果线程没有启动，需要做一些清理工作，如前面 workCount 加了 1，将其减掉
+                addWorkerFailed(w);
+        }
+        // 返回线程是否启动成功
+        return workerStarted;
+    }
+
+    // workers 中删除掉相应的 worker
+    // workCount 减 1
+    private void addWorkerFailed(Worker w) {
+        final ReentrantLock mainLock = this.mainLock;
+        mainLock.lock();
+        try {
+            if (w != null)
+                workers.remove(w);
+            decrementWorkerCount();
+            tryTerminate();
+        } finally {
+            mainLock.unlock();
+        }
+    }
+```
+
+worker 中的线程 start 后，其 run 方法会调用 runWorker 方法：
+
+```Java
+// Worker 类的 run() 方法
+public void run() {
+    runWorker(this);
+}
+
+// 此方法由 worker 线程启动后调用，这里用一个 while 循环来不断地从等待队列中获取任务并执行
+// 前面说了，worker 在初始化的时候，可以指定 firstTask，那么第一个任务也就可以不需要从队列中获取
+final void runWorker(Worker w) {
+        Thread wt = Thread.currentThread();
+        // 该线程的第一个任务(如果有的话)
+        Runnable task = w.firstTask;
+        w.firstTask = null;
+        w.unlock(); // allow interrupts
+        boolean completedAbruptly = true;
+        try {
+            // 循环调用 getTask 获取任务
+            while (task != null || (task = getTask()) != null) {
+                w.lock();
+                // If pool is stopping, ensure thread is interrupted;
+                // if not, ensure thread is not interrupted.  This
+                // requires a recheck in second case to deal with
+                // shutdownNow race while clearing interrupt
+                // 如果线程池状态大于等于 STOP，那么意味着该线程也要中断
+                if ((runStateAtLeast(ctl.get(), STOP) ||
+                     (Thread.interrupted() &&
+                      runStateAtLeast(ctl.get(), STOP))) &&
+                    !wt.isInterrupted())
+                    wt.interrupt();
+                try {
+                    // 这是一个钩子方法，留给需要的子类实现
+                    beforeExecute(wt, task);
+                    Throwable thrown = null;
+                    try {
+                        // 执行任务
+                        task.run();
+                    } catch (RuntimeException x) {
+                        thrown = x; throw x;
+                    } catch (Error x) {
+                        thrown = x; throw x;
+                    } catch (Throwable x) {
+                        // 这里不允许抛出 Throwable，所以转换为 Error
+                        thrown = x; throw new Error(x);
+                    } finally {
+                        // 也是一个钩子方法，将 task 和异常作为参数，留给需要的子类实现
+                        afterExecute(task, thrown);
+                    }
+                } finally {
+                    // 置空 task，准备 getTask 获取下一个任务
+                    task = null;
+                    // 累加完成的任务数
+                    w.completedTasks++;
+                    // 释放掉 worker 的独占锁
+                    w.unlock();
+                }
+            }
+            completedAbruptly = false;
+        } finally {
+            // 如果到这里，需要执行线程关闭：
+            // 1. 说明 getTask 返回 null，也就是说，这个 worker 的使命结束了，执行关闭
+            // 2. 任务执行过程中发生了异常
+            // 第一种情况，已经在代码处理了将 workCount 减 1，这个在 getTask 方法分析中会说
+            // 第二种情况，workCount 没有进行处理，所以需要在 processWorkerExit 中处理
+            processWorkerExit(w, completedAbruptly);
+        }
+    }
+```
