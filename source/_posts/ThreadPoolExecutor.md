@@ -229,48 +229,6 @@ private final class Worker
 ```
 
 
-```Java
-public void execute(Runnable command) {
-        if (command == null)
-            throw new NullPointerException();
-        /*
-         * Proceed in 3 steps:
-         *
-         * 1. If fewer than corePoolSize threads are running, try to
-         * start a new thread with the given command as its first
-         * task.  The call to addWorker atomically checks runState and
-         * workerCount, and so prevents false alarms that would add
-         * threads when it shouldn't, by returning false.
-         *
-         * 2. If a task can be successfully queued, then we still need
-         * to double-check whether we should have added a thread
-         * (because existing ones died since last checking) or that
-         * the pool shut down since entry into this method. So we
-         * recheck state and if necessary roll back the enqueuing if
-         * stopped, or start a new thread if there are none.
-         *
-         * 3. If we cannot queue task, then we try to add a new
-         * thread.  If it fails, we know we are shut down or saturated
-         * and so reject the task.
-         */
-        int c = ctl.get();
-        if (workerCountOf(c) < corePoolSize) {
-            if (addWorker(command, true))
-                return;
-            c = ctl.get();
-        }
-        if (isRunning(c) && workQueue.offer(command)) {
-            int recheck = ctl.get();
-            if (! isRunning(recheck) && remove(command))
-                reject(command);
-            else if (workerCountOf(recheck) == 0)
-                addWorker(null, false);
-        }
-        else if (!addWorker(command, false))
-            reject(command);
-    }
-```
-
 ### execute
 各种方法都最终依赖于 execute 方法
 ```Java
@@ -518,4 +476,110 @@ final void runWorker(Worker w) {
             processWorkerExit(w, completedAbruptly);
         }
     }
+
+    // 此方法有三种可能
+    // 1. 阻塞直到获取到任务返回。
+    // 2. 任务退出
+    // 3. 如果发生以下条件，此方法必须返回null
+    //   — 池中有大于maximumPoolSize 个 workers存在
+    //   - 线程池处于SHUTDOWN，而且workQueue是空的
+    //   - 线程池处于STOP，不仅不接受新的线程，连workQueue中的线程也不再执行
+    private Runnable getTask() {
+        boolean timedOut = false; // Did the last poll() time out?
+
+        for (;;) {
+            int c = ctl.get();
+            int rs = runStateOf(c);
+            // 两种可能
+            // 1. rs == SHUTDOWN && workQueue.isEmpty()
+            // 2. rs >= STOP
+            // Check if queue empty only if necessary.
+            if (rs >= SHUTDOWN && (rs >= STOP || workQueue.isEmpty())) {
+                // CAS操作，减少工作线程数
+                decrementWorkerCount();
+                return null;
+            }
+
+            int wc = workerCountOf(c);
+
+            // Are workers subject to culling?
+            boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
+
+            // 如果wc >maximunPoolSize或者超时，并且(wc>1或者workQueue为空)  并且CAS成功返回null
+            // CAS不成功，继续循环
+            if ((wc > maximumPoolSize || (timed && timedOut))
+                && (wc > 1 || workQueue.isEmpty())) {
+                if (compareAndDecrementWorkerCount(c))
+                    return null;
+                continue;
+            }
+
+            // wc <= maximumPoolSize 并且没有超时，会走到这
+            try {
+                // 到workQueue中获取任务
+                Runnable r = timed ?
+                    workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
+                    workQueue.take();
+                if (r != null)
+                    return r;
+                timedOut = true;
+            } catch (InterruptedException retry) {
+                // 如果此 worker 发生了中断，采取的方案是重试
+                // 解释下为什么会发生中断，这个读者要去看 setMaximumPoolSize 方法，
+                // 如果开发者将 maximumPoolSize 调小了，导致其小于当前的 workers 数量，
+                // 那么意味着超出的部分线程要被关闭。重新进入 for 循环，自然会有部分线程会返回 null
+                timedOut = false;
+            }
+        }
+    }
+```
+
+### reject
+```Java
+final void reject(Runnable command) {
+    // 执行拒绝策略
+    handler.rejectedExecution(command, this);
+}
+```
+线程池预先定义了如下拒绝策略，一般可以满足需求，当然也可以自己实现
+```Java
+// 只要线程池没有被关闭，那么由提交任务的线程自己来执行这个任务。
+public static class CallerRunsPolicy implements RejectedExecutionHandler {
+    public CallerRunsPolicy() { }
+    public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+        if (!e.isShutdown()) {
+            r.run();
+        }
+    }
+}
+
+// 不管怎样，直接抛出 RejectedExecutionException 异常
+// 这个是默认的策略，如果我们构造线程池的时候不传相应的 handler 的话，那就会指定使用这个
+public static class AbortPolicy implements RejectedExecutionHandler {
+    public AbortPolicy() { }
+    public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+        throw new RejectedExecutionException("Task " + r.toString() +
+                                             " rejected from " +
+                                             e.toString());
+    }
+}
+
+// 不做任何处理，直接忽略掉这个任务
+public static class DiscardPolicy implements RejectedExecutionHandler {
+    public DiscardPolicy() { }
+    public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+    }
+}
+
+// 这个相对霸道一点，如果线程池没有被关闭的话，
+// 把队列队头的任务(也就是等待了最长时间的)直接扔掉，然后提交这个任务到等待队列中
+public static class DiscardOldestPolicy implements RejectedExecutionHandler {
+    public DiscardOldestPolicy() { }
+    public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+        if (!e.isShutdown()) {
+            e.getQueue().poll();
+            e.execute(r);
+        }
+    }
+}
 ```
