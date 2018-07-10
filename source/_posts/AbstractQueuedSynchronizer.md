@@ -7,7 +7,7 @@ toc: true
 ## AQS结构
 
 先来看看AQS有哪些属性
-``` Java
+```Java
    /**
      * Head of the wait queue, lazily initialized.  Except for
      * initialization, it is modified only via method setHead.  Note:
