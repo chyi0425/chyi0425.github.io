@@ -4,6 +4,7 @@ date: 2018-07-10 10:14:20
 tags: [Java,collection,concurrency] #文章标签，多于一项时用这种格式
 toc: true
 ---
+
 ## Java7 HashMap
 Java7 HashMap结构示意图，不考虑扩容的情况
 ![示意图](/img/hashmap-1.png)
@@ -11,7 +12,7 @@ Java7 HashMap结构示意图，不考虑扩容的情况
 绿色的实体是嵌套类Entry的实例，Entry包含4个属性: key,value,hash值和用于单向链表的next。
 capacity:当前数组容量，始终保持2^n，可以扩容，扩容以后数组大小为当前2倍
 loadFactor:负载因子，默认0.75
-threshold:扩容的阈值，等于capacity*loadFactor
+threshold:扩容的阈值，等于capacity\*loadFactor
 
 ### put过程分析
 ```Java
@@ -160,151 +161,82 @@ final Entry<K,V> getEntry(Object key) {
 }
 ```
 
-## Java7 ConcurrentHashMap
-整个 ConcurrentHashMap 由一个个 Segment 组成，Segment 代表”部分“或”一段“的意思，所以很多地方都会将其描述为**分段锁**。
-简单理解就是，ConcurrentHashMap 是一个 Segment 数组，Segment 通过继承 ReentrantLock 来进行加锁，所以每次需要加锁的操作锁住的是一个 segment，这样只要保证每个 Segment 是线程安全的，也就实现了全局的线程安全。
+## Java8 HashMap
+Java8对HashMap进行了一些修改，最大的不同就是利用了红黑树，所以其由**数组+链表+红黑树**组成
+根据 Java7 HashMap 的介绍，我们知道，查找的时候，根据 hash 值我们能够快速定位到数组的具体下标，但是之后的话，需要顺着链表一个个比较下去才能找到我们需要的，时间复杂度取决于链表的长度，为 O(n)。
+为了降低这部分的开销，在 Java8 中，当链表中的元素达到了 8 个时，会将链表转换为红黑树，在这些位置进行查找的时候可以降低时间复杂度为 O(logN)。
 ![示意图](/img/hashmap-2.png)
+Java7 中使用 Entry 来代表每个 HashMap 中的数据节点，Java8 中使用 **Node**，基本没有区别，都是 key，value，hash 和 next 这四个属性，不过，Node 只能用于链表的情况，红黑树的情况需要使用 TreeNode。
+我们根据数组元素中，第一个节点数据类型是 Node 还是 TreeNode 来判断该位置下是链表还是红黑树的。
 
-**concurrencyLevel**：并行级别、并发数、Segment 数，怎么翻译不重要，理解它。默认是 16，也就是说 ConcurrentHashMap 有 16 个 Segments，所以理论上，这个时候，最多可以同时支持 16 个线程并发写，只要它们的操作分别分布在不同的 Segment 上。这个值可以在初始化的时候设置为其他值，但是一旦初始化以后，它是不可以扩容的。
-再具体到每个 Segment 内部，其实每个 Segment 很像之前介绍的 HashMap，不过它要保证线程安全，所以处理起来要麻烦些。
-### 初始化
-initialCapacity：初始容量，这个值指的是整个 ConcurrentHashMap 的初始容量，实际操作的时候需要平均分给每个 Segment。
-loadFactor：负载因子，之前我们说了，Segment 数组不可以扩容，所以这个负载因子是给每个 Segment 内部使用的。
+### put 过程分析
 ```Java
-public ConcurrentHashMap(int initialCapacity,
-                         float loadFactor, int concurrencyLevel) {
-    if (!(loadFactor > 0) || initialCapacity < 0 || concurrencyLevel <= 0)
-        throw new IllegalArgumentException();
-    if (concurrencyLevel > MAX_SEGMENTS)
-        concurrencyLevel = MAX_SEGMENTS;
-    // Find power-of-two sizes best matching arguments
-    int sshift = 0;
-    int ssize = 1;
-    // 计算并行级别 ssize，因为要保持并行级别是 2 的 n 次方
-    while (ssize < concurrencyLevel) {
-        ++sshift;
-        ssize <<= 1;
+    public V put(K key, V value) {
+        return putVal(hash(key), key, value, false, true);
     }
-    // 我们这里先不要那么烧脑，用默认值，concurrencyLevel 为 16，sshift 为 4
-    // 那么计算出 segmentShift 为 28，segmentMask 为 15，后面会用到这两个值
-    this.segmentShift = 32 - sshift;
-    this.segmentMask = ssize - 1;
 
-    if (initialCapacity > MAXIMUM_CAPACITY)
-        initialCapacity = MAXIMUM_CAPACITY;
-
-    // initialCapacity 是设置整个 map 初始的大小，
-    // 这里根据 initialCapacity 计算 Segment 数组中每个位置可以分到的大小
-    // 如 initialCapacity 为 64，那么每个 Segment 或称之为"槽"可以分到 4 个
-    int c = initialCapacity / ssize;
-    if (c * ssize < initialCapacity)
-        ++c;
-    // 默认 MIN_SEGMENT_TABLE_CAPACITY 是 2，这个值也是有讲究的，因为这样的话，对于具体的槽上，
-    // 插入一个元素不至于扩容，插入第二个的时候才会扩容
-    int cap = MIN_SEGMENT_TABLE_CAPACITY; 
-    while (cap < c)
-        cap <<= 1;
-
-    // 创建 Segment 数组，
-    // 并创建数组的第一个元素 segment[0]
-    Segment<K,V> s0 =
-        new Segment<K,V>(loadFactor, (int)(cap * loadFactor),
-                         (HashEntry<K,V>[])new HashEntry[cap]);
-    Segment<K,V>[] ss = (Segment<K,V>[])new Segment[ssize];
-    // 往数组写入 segment[0]
-    UNSAFE.putOrderedObject(ss, SBASE, s0); // ordered write of segments[0]
-    this.segments = ss;
-}
-```
-用 new ConcurrentHashMap() 无参构造函数进行初始化的，那么初始化完成后：
-* Segment 数组长度为 16，不可以扩容
-* Segment[i] 的默认大小为 2，负载因子是 0.75，得出初始阈值为 1.5，也就是以后插入第一个元素不会触发扩容，插入第二个会进行第一次扩容
-* 这里初始化了 segment[0]，其他位置还是 null，至于为什么要初始化 segment[0]，后面的代码会介绍
-* 当前 segmentShift 的值为 32 - 4 = 28，segmentMask 为 16 - 1 = 15，姑且把它们简单翻译为**移位数**和**掩码**，这两个值马上就会用到
-
-#### put 过程分析
-```Java
-public V put(K key, V value) {
-    Segment<K,V> s;
-    if (value == null)
-        throw new NullPointerException();
-    // 1. 计算 key 的 hash 值
-    int hash = hash(key);
-    // 2. 根据 hash 值找到 Segment 数组中的位置 j
-    //    hash 是 32 位，无符号右移 segmentShift(28) 位，剩下高 4 位，
-    //    然后和 segmentMask(15) 做一次与操作，也就是说 j 是 hash 值的高 4 位，也就是槽的数组下标
-    int j = (hash >>> segmentShift) & segmentMask;
-    // 刚刚说了，初始化的时候初始化了 segment[0]，但是其他位置还是 null，
-    // ensureSegment(j) 对 segment[j] 进行初始化
-    if ((s = (Segment<K,V>)UNSAFE.getObject          // nonvolatile; recheck
-         (segments, (j << SSHIFT) + SBASE)) == null) //  in ensureSegment
-        s = ensureSegment(j);
-    // 3. 插入新值到 槽 s 中
-    return s.put(key, hash, value, false);
-}
-```
-第一层皮很简单，根据 hash 值很快就能找到相应的 Segment，之后就是 Segment 内部的 put 操作了。
-
-Segment 内部是由 **数组+链表** 组成的。
-
-```Java
-final V put(K key, int hash, V value, boolean onlyIfAbsent) {
-    // 在往该 segment 写入前，需要先获取该 segment 的独占锁
-    //    先看主流程，后面还会具体介绍这部分内容
-    HashEntry<K,V> node = tryLock() ? null :
-        scanAndLockForPut(key, hash, value);
-    V oldValue;
-    try {
-        // 这个是 segment 内部的数组
-        HashEntry<K,V>[] tab = table;
-        // 再利用 hash 值，求应该放置的数组下标
-        int index = (tab.length - 1) & hash;
-        // first 是数组该位置处的链表的表头
-        HashEntry<K,V> first = entryAt(tab, index);
-
-        // 下面这串 for 循环虽然很长，不过也很好理解，想想该位置没有任何元素和已经存在一个链表这两种情况
-        for (HashEntry<K,V> e = first;;) {
-            if (e != null) {
-                K k;
-                if ((k = e.key) == key ||
-                    (e.hash == hash && key.equals(k))) {
-                    oldValue = e.value;
-                    if (!onlyIfAbsent) {
-                        // 覆盖旧值
-                        e.value = value;
-                        ++modCount;
-                    }
-                    break;
-                }
-                // 继续顺着链表走
-                e = e.next;
-            }
+        /**
+     * Implements Map.put and related methods
+     *
+     * @param hash hash for key
+     * @param key the key
+     * @param value the value to put
+     * @param onlyIfAbsent if true, don't change existing value
+     * @param evict if false, the table is in creation mode.
+     * @return previous value, or null if none
+     */
+    final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+                   boolean evict) {
+        Node<K,V>[] tab; Node<K,V> p; int n, i;
+        // 第一次put的时候，触发resize() 类似 java7 的第一次 put 也要初始化数组长度
+        // 第一次 resize 和后续的扩容有些不一样，因为这次是数组从 null 初始化到默认的 16 或自定义的初始容量
+        if ((tab = table) == null || (n = tab.length) == 0)
+            n = (tab = resize()).length;
+        // 找到具体的数组下标，如果此位置没有值，那么直接初始化一下 Node 并放置在这个位置就可以了
+        if ((p = tab[i = (n - 1) & hash]) == null)
+            tab[i] = newNode(hash, key, value, null);
+        else {
+            // 数组该位置有数据
+            Node<K,V> e; K k;
+            // 首先，判断该位置的第一个数据和我们要插入的数据，key 是不是"相等"，如果是，取出这个节点
+            if (p.hash == hash &&
+                ((k = p.key) == key || (key != null && key.equals(k))))
+                e = p;
+            // 如果该节点是代表红黑树的节点，调用红黑树的插值方法
+            else if (p instanceof TreeNode)
+                e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
             else {
-                // node 到底是不是 null，这个要看获取锁的过程，不过和这里都没有关系。
-                // 如果不为 null，那就直接将它设置为链表表头；如果是null，初始化并设置为链表表头。
-                if (node != null)
-                    node.setNext(first);
-                else
-                    node = new HashEntry<K,V>(hash, key, value, first);
-
-                int c = count + 1;
-                // 如果超过了该 segment 的阈值，这个 segment 需要扩容
-                if (c > threshold && tab.length < MAXIMUM_CAPACITY)
-                    rehash(node); // 扩容后面也会具体分析
-                else
-                    // 没有达到阈值，将 node 放到数组 tab 的 index 位置，
-                    // 其实就是将新的节点设置成原链表的表头
-                    setEntryAt(tab, index, node);
-                ++modCount;
-                count = c;
-                oldValue = null;
-                break;
+                // 到这里，说明数组该位置上是一个链表
+                for (int binCount = 0; ; ++binCount) {
+                    // 插入到链表的最后面(Java7 是插入到链表的最前面)
+                    if ((e = p.next) == null) {
+                        p.next = newNode(hash, key, value, null);
+                        // TREEIFY_THRESHOLD 为 8，所以，如果新插入的值是链表中的第 8 个
+                        // 会触发下面的 treeifyBin，也就是将链表转换为红黑树
+                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                            treeifyBin(tab, hash);
+                        break;
+                    }
+                    // 如果在该链表中找到了"相等"的 key(== 或 equals)
+                    if (e.hash == hash &&
+                        ((k = e.key) == key || (key != null && key.equals(k))))
+                        break;
+                    p = e;
+                }
+            }
+            if (e != null) { // existing mapping for key
+                V oldValue = e.value;
+                if (!onlyIfAbsent || oldValue == null)
+                    e.value = value;
+                afterNodeAccess(e);
+                return oldValue;
             }
         }
-    } finally {
-        // 解锁
-        unlock();
+        ++modCount;
+        if (++size > threshold)
+            resize();
+        afterNodeInsertion(evict);
+        return null;
     }
-    return oldValue;
-}
+
 ```
