@@ -16,7 +16,7 @@
 <meta property="og:site_name" content="Alex&#39;s blog">
 <meta property="og:description" content="线程中断首先，我们要明白，中断不是类似 linux 里面的命令 kill -9 pid，不是说我们中断某个线程，这个线程就停止运行了。中断代表线程状态，每个线程都关联了一个中断状态，是一个 true 或 false 的 boolean 值，初始值为 false。 关于中断状态，我们需要重点关注以下几个方法：12345678910// Thread 类中的实例方法，持有线程实例引用即可检测线程中断状">
 <meta property="og:locale" content="en">
-<meta property="og:updated_time" content="2018-07-05T07:13:50.577Z">
+<meta property="og:updated_time" content="2018-07-05T07:26:08.934Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Java-Interrupt">
 <meta name="twitter:description" content="线程中断首先，我们要明白，中断不是类似 linux 里面的命令 kill -9 pid，不是说我们中断某个线程，这个线程就停止运行了。中断代表线程状态，每个线程都关联了一个中断状态，是一个 true 或 false 的 boolean 值，初始值为 false。 关于中断状态，我们需要重点关注以下几个方法：12345678910// Thread 类中的实例方法，持有线程实例引用即可检测线程中断状">
@@ -325,6 +325,15 @@
   
 <nav id="article-nav">
   
+    <a href="/2018/07/08/ThreadPoolExecutor/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          ThreadPoolExecutor
+        
+      </div>
+    </a>
+  
   
     <a href="/2018/06/30/AQS-condition/" id="article-nav-older" class="article-nav-link-wrap">
       <div class="article-nav-title">AQS-condition</div>
@@ -474,15 +483,15 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
+              </li>
+             
+              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">git</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">hexo</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
               </li>
             
             <div class="clearfix"></div>
