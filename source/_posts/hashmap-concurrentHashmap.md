@@ -371,3 +371,144 @@ final Node<K,V> getNode(int hash, Object key) {
     return null;
 }
 ```
+
+## Java8 ConcurrentHashMap
+![示意图](/img/hashmap-3.png)
+结构上和 Java8 的 HashMap 基本上一样，不过它要保证线程安全性，所以在源码上确实要复杂一些。
+
+### 初始化
+```Java
+    /**
+     * Creates a new, empty map with the default initial table size (16).
+     */
+    public ConcurrentHashMap() {
+    }
+```
+```Java
+    public ConcurrentHashMap(int initialCapacity) {
+        if (initialCapacity < 0)
+            throw new IllegalArgumentException();
+        int cap = ((initialCapacity >= (MAXIMUM_CAPACITY >>> 1)) ?
+                   MAXIMUM_CAPACITY :
+                   tableSizeFor(initialCapacity + (initialCapacity >>> 1) + 1));
+        this.sizeCtl = cap;
+    }
+```
+通过提供初始容量，计算了 sizeCtl，sizeCtl = 【 (1.5 * initialCapacity + 1)，然后向上取最近的 2 的 n 次方】。如 initialCapacity 为 10，那么得到 sizeCtl 为 16，如果 initialCapacity 为 11，得到 sizeCtl 为 32。
+
+### put过程分析
+```Java
+	public V put(K key, V value) {
+        return putVal(key, value, false);
+    }
+
+    /** Implementation for put and putIfAbsent */
+    final V putVal(K key, V value, boolean onlyIfAbsent) {
+        if (key == null || value == null) throw new NullPointerException();
+        // 得到hash值
+        int hash = spread(key.hashCode());
+        // 用于记录相应链表的长度
+        int binCount = 0;
+        for (Node<K,V>[] tab = table;;) {
+            Node<K,V> f; int n, i, fh;
+            if (tab == null || (n = tab.length) == 0)
+            	// 如果数组null，初始化
+                tab = initTable();
+            // 非空，找到对应的数组下标，得到第一个节点 f
+            else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+            	// 如果数组该位置为空，用一次CAS操作将这个新值放入其中即可，
+            	// 如果CAS不成功，进入下一个循环
+                if (casTabAt(tab, i, null,
+                             new Node<K,V>(hash, key, value, null)))
+                    break;                   // no lock when adding to empty bin
+            }
+            // 扩容场景
+            else if ((fh = f.hash) == MOVED)
+                tab = helpTransfer(tab, f);
+            else {	// f是该位置的头结点，且不为空
+                V oldVal = null;
+                // 获取该位置头结点的监视器锁
+                synchronized (f) {
+                    if (tabAt(tab, i) == f) {
+                        if (fh >= 0) {	// 头结点的hash>0，说明是链表
+                        	// 记录链表的长度
+                            binCount = 1;
+                            // 遍历链表
+                            for (Node<K,V> e = f;; ++binCount) {
+                                K ek;
+                                // 如果发现“相等”的key，判断是否需要覆盖
+                                if (e.hash == hash &&
+                                    ((ek = e.key) == key ||
+                                     (ek != null && key.equals(ek)))) {
+                                    oldVal = e.val;
+                                    if (!onlyIfAbsent)
+                                        e.val = value;
+                                    break;
+                                }
+                                // 到了链表的最末端，将这个新值放到链表的最后面
+                                Node<K,V> pred = e;
+                                if ((e = e.next) == null) {
+                                    pred.next = new Node<K,V>(hash, key,
+                                                              value, null);
+                                    break;
+                                }
+                            }
+                        }
+                        // 红黑树
+                        else if (f instanceof TreeBin) {
+                            Node<K,V> p;
+                            binCount = 2;
+                            // 调用红黑树的插值方法插入新节点
+                            if ((p = ((TreeBin<K,V>)f).putTreeVal(hash, key,
+                                                           value)) != null) {
+                                oldVal = p.val;
+                                if (!onlyIfAbsent)
+                                    p.val = value;
+                            }
+                        }
+                    }
+                }
+                if (binCount != 0) {
+                	// 判断是否要将链表转换为红黑树，临界值和 HashMap 一样，也是 8
+                    if (binCount >= TREEIFY_THRESHOLD)
+					// 这个方法和 HashMap 中稍微有一点点不同，那就是它不是一定会进行红黑树转换，
+                    // 如果当前数组的长度小于 64，那么会选择进行数组扩容，而不是转换为红黑树
+                        treeifyBin(tab, i);
+                    if (oldVal != null)
+                        return oldVal;
+                    break;
+                }
+            }
+        }
+        addCount(1L, binCount);
+        return null;
+    }
+```
+#### 初始化数组:initTable
+```Java
+    /**
+     * Initializes table, using the size recorded in sizeCtl.
+     */
+    private final Node<K,V>[] initTable() {
+        Node<K,V>[] tab; int sc;
+        while ((tab = table) == null || tab.length == 0) {
+            if ((sc = sizeCtl) < 0)
+                Thread.yield(); // lost initialization race; just spin
+            else if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {
+                try {
+                    if ((tab = table) == null || tab.length == 0) {
+                        int n = (sc > 0) ? sc : DEFAULT_CAPACITY;
+                        @SuppressWarnings("unchecked")
+                        Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
+                        table = tab = nt;
+                        sc = n - (n >>> 2);
+                    }
+                } finally {
+                    sizeCtl = sc;
+                }
+                break;
+            }
+        }
+        return tab;
+    }
+```
