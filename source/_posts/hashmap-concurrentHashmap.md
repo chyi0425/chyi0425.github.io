@@ -220,10 +220,13 @@ Java7 中使用 Entry 来代表每个 HashMap 中的数据节点，Java8 中使�
                     // 如果在该链表中找到了"相等"的 key(== 或 equals)
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
+                        // 此时 break，那么 e 为链表中[与要插入的新值的 key "相等"]的 node
                         break;
                     p = e;
                 }
             }
+            // e!=null 说明存在旧值的key与要插入的key"相等"
+            // 对于我们分析的put操作，下面这个 if 其实就是进行 "值覆盖"，然后返回旧值
             if (e != null) { // existing mapping for key
                 V oldValue = e.value;
                 if (!onlyIfAbsent || oldValue == null)
@@ -234,9 +237,13 @@ Java7 中使用 Entry 来代表每个 HashMap 中的数据节点，Java8 中使�
         }
         ++modCount;
         if (++size > threshold)
+            // 如果 HashMap 由于新插入这个值导致 size 已经超过了阈值，需要进行扩容
+            // 和 Java7 稍微有点不一样的地方就是，Java7 是先扩容后插入新值的，Java8 先插值再扩容，不过这个不重要。
             resize();
         afterNodeInsertion(evict);
         return null;
     }
 
 ```
+
+#### 数组扩容
