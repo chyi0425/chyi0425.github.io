@@ -225,8 +225,8 @@ Java7 中使用 Entry 来代表每个 HashMap 中的数据节点，Java8 中使�
                     p = e;
                 }
             }
-            // e!=null 说明存在旧值的key与要插入的key"相等"
-            // 对于我们分析的put操作，下面这个 if 其实就是进行 "值覆盖"，然后返回旧值
+    		// e!=null 说明存在旧值的key与要插入的key"相等"
+	        // 对于我们分析的put操作，下面这个 if 其实就是进行 "值覆盖"，然后返回旧值
             if (e != null) { // existing mapping for key
                 V oldValue = e.value;
                 if (!onlyIfAbsent || oldValue == null)
@@ -236,6 +236,7 @@ Java7 中使用 Entry 来代表每个 HashMap 中的数据节点，Java8 中使�
             }
         }
         ++modCount;
+        // 如果 HashMap 由于新插入这个值导致 size 已经超过了阈值，需要进行扩容  和 Java7 稍微有点不一样的地方就是，Java7 是先扩容后插入新值的，Java8 先插值再扩容
         if (++size > threshold)
             // 如果 HashMap 由于新插入这个值导致 size 已经超过了阈值，需要进行扩容
             // 和 Java7 稍微有点不一样的地方就是，Java7 是先扩容后插入新值的，Java8 先插值再扩容，不过这个不重要。
@@ -245,5 +246,366 @@ Java7 中使用 Entry 来代表每个 HashMap 中的数据节点，Java8 中使�
     }
 
 ```
-
 #### 数组扩容
+resize() 方法用于**初始化数组**或**数组扩容**，每次扩容后，容量为原来的 2 倍，并进行数据迁移。
+
+```Java
+final Node<K,V>[] resize() {
+        Node<K,V>[] oldTab = table;
+        int oldCap = (oldTab == null) ? 0 : oldTab.length;
+        int oldThr = threshold;
+        int newCap, newThr = 0;
+        if (oldCap > 0) { //数组扩容
+            if (oldCap >= MAXIMUM_CAPACITY) {
+                threshold = Integer.MAX_VALUE;
+                return oldTab;
+            }
+            // 将数组大小扩大一倍
+            else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                     oldCap >= DEFAULT_INITIAL_CAPACITY)
+                // 将阈值扩大一倍
+                newThr = oldThr << 1; // double threshold
+        }
+        // 对应使用 new HashMap(int initialCapacity) 初始化后，第一次 put 的时候
+        else if (oldThr > 0) // initial capacity was placed in threshold
+            newCap = oldThr;
+        // 对应使用 new HashMap() 初始化后，第一次 put 的时候
+        else {               // zero initial threshold signifies using defaults
+            newCap = DEFAULT_INITIAL_CAPACITY;
+            newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+        }
+        if (newThr == 0) {
+            float ft = (float)newCap * loadFactor;
+            newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                      (int)ft : Integer.MAX_VALUE);
+        }
+        threshold = newThr;
+        // 用新的数组大小初始化新的数组
+        @SuppressWarnings({"rawtypes","unchecked"})
+            Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+		// 如果是初始化数组，到这里就结束了，返回 newTab 即可
+        table = newTab;
+        if (oldTab != null) {
+        	// 开始遍历原数组，进行数据迁移。
+            for (int j = 0; j < oldCap; ++j) {
+                Node<K,V> e;
+                if ((e = oldTab[j]) != null) {
+                    oldTab[j] = null;
+                    // 如果该数组位置上只有单个元素，那就简单了，简单迁移这个元素就可以了
+                    if (e.next == null)
+                        newTab[e.hash & (newCap - 1)] = e;
+					// 如果是红黑树
+                    else if (e instanceof TreeNode)
+                        ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                    else { // preserve order
+                    	// 这块是处理链表的情况，
+	                    // 需要将此链表拆成两个链表，放到新的数组中，并且保留原来的先后顺序
+    	                // loHead、loTail 对应一条链表，hiHead、hiTail 对应另一条链表，代码还是比较简单的
+                        Node<K,V> loHead = null, loTail = null;
+                        Node<K,V> hiHead = null, hiTail = null;
+                        Node<K,V> next;
+                        do {
+                            next = e.next;
+                            if ((e.hash & oldCap) == 0) {
+                                if (loTail == null)
+                                    loHead = e;
+                                else
+                                    loTail.next = e;
+                                loTail = e;
+                            }
+                            else {
+                                if (hiTail == null)
+                                    hiHead = e;
+                                else
+                                    hiTail.next = e;
+                                hiTail = e;
+                            }
+                        } while ((e = next) != null);
+                        if (loTail != null) {
+                            loTail.next = null;
+                            newTab[j] = loHead;
+                        }
+                        if (hiTail != null) {
+                            hiTail.next = null;
+                            newTab[j + oldCap] = hiHead;
+                        }
+                    }
+                }
+            }
+        }
+        return newTab;
+    }
+```
+
+### get 过程分析
+相对于 put 来说，get 真的太简单了。
+
+1. 计算 key 的 hash 值，根据 hash 值找到对应数组下标: hash & (length-1)
+2. 判断数组该位置处的元素是否刚好就是我们要找的，如果不是，走第三步
+3. 判断该元素类型是否是 TreeNode，如果是，用红黑树的方法取数据，如果不是，走第四步
+4. 遍历链表，直到找到相等(==或equals)的 key
+```Java
+public V get(Object key) {
+    Node<K,V> e;
+    return (e = getNode(hash(key), key)) == null ? null : e.value;
+}
+
+final Node<K,V> getNode(int hash, Object key) {
+    Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+    if ((tab = table) != null && (n = tab.length) > 0 &&
+        (first = tab[(n - 1) & hash]) != null) {
+        // 判断第一个节点是不是就是需要的
+        if (first.hash == hash && // always check first node
+            ((k = first.key) == key || (key != null && key.equals(k))))
+            return first;
+        if ((e = first.next) != null) {
+            // 判断是否是红黑树
+            if (first instanceof TreeNode)
+                return ((TreeNode<K,V>)first).getTreeNode(hash, key);
+
+            // 链表遍历
+            do {
+                if (e.hash == hash &&
+                    ((k = e.key) == key || (key != null && key.equals(k))))
+                    return e;
+            } while ((e = e.next) != null);
+        }
+    }
+    return null;
+}
+```
+
+## Java8 ConcurrentHashMap
+![示意图](/img/hashmap-3.png)
+结构上和 Java8 的 HashMap 基本上一样，不过它要保证线程安全性，所以在源码上确实要复杂一些。
+
+### 初始化
+```Java
+    /**
+     * Creates a new, empty map with the default initial table size (16).
+     */
+    public ConcurrentHashMap() {
+    }
+```
+```Java
+    public ConcurrentHashMap(int initialCapacity) {
+        if (initialCapacity < 0)
+            throw new IllegalArgumentException();
+        int cap = ((initialCapacity >= (MAXIMUM_CAPACITY >>> 1)) ?
+                   MAXIMUM_CAPACITY :
+                   tableSizeFor(initialCapacity + (initialCapacity >>> 1) + 1));
+        this.sizeCtl = cap;
+    }
+```
+通过提供初始容量，计算了 sizeCtl，sizeCtl = 【 (1.5 * initialCapacity + 1)，然后向上取最近的 2 的 n 次方】。如 initialCapacity 为 10，那么得到 sizeCtl 为 16，如果 initialCapacity 为 11，得到 sizeCtl 为 32。
+
+### put过程分析
+```Java
+	public V put(K key, V value) {
+        return putVal(key, value, false);
+    }
+
+    /** Implementation for put and putIfAbsent */
+    final V putVal(K key, V value, boolean onlyIfAbsent) {
+        if (key == null || value == null) throw new NullPointerException();
+        // 得到hash值
+        int hash = spread(key.hashCode());
+        // 用于记录相应链表的长度
+        int binCount = 0;
+        for (Node<K,V>[] tab = table;;) {
+            Node<K,V> f; int n, i, fh;
+            if (tab == null || (n = tab.length) == 0)
+            	// 如果数组null，初始化
+                tab = initTable();
+            // 非空，找到对应的数组下标，得到第一个节点 f
+            else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+            	// 如果数组该位置为空，用一次CAS操作将这个新值放入其中即可，
+            	// 如果CAS不成功，进入下一个循环
+                if (casTabAt(tab, i, null,
+                             new Node<K,V>(hash, key, value, null)))
+                    break;                   // no lock when adding to empty bin
+            }
+            // 扩容场景
+            else if ((fh = f.hash) == MOVED)
+                tab = helpTransfer(tab, f);
+            else {	// f是该位置的头结点，且不为空
+                V oldVal = null;
+                // 获取该位置头结点的监视器锁
+                synchronized (f) {
+                    if (tabAt(tab, i) == f) {
+                        if (fh >= 0) {	// 头结点的hash>0，说明是链表
+                        	// 记录链表的长度
+                            binCount = 1;
+                            // 遍历链表
+                            for (Node<K,V> e = f;; ++binCount) {
+                                K ek;
+                                // 如果发现“相等”的key，判断是否需要覆盖
+                                if (e.hash == hash &&
+                                    ((ek = e.key) == key ||
+                                     (ek != null && key.equals(ek)))) {
+                                    oldVal = e.val;
+                                    if (!onlyIfAbsent)
+                                        e.val = value;
+                                    break;
+                                }
+                                // 到了链表的最末端，将这个新值放到链表的最后面
+                                Node<K,V> pred = e;
+                                if ((e = e.next) == null) {
+                                    pred.next = new Node<K,V>(hash, key,
+                                                              value, null);
+                                    break;
+                                }
+                            }
+                        }
+                        // 红黑树
+                        else if (f instanceof TreeBin) {
+                            Node<K,V> p;
+                            binCount = 2;
+                            // 调用红黑树的插值方法插入新节点
+                            if ((p = ((TreeBin<K,V>)f).putTreeVal(hash, key,
+                                                           value)) != null) {
+                                oldVal = p.val;
+                                if (!onlyIfAbsent)
+                                    p.val = value;
+                            }
+                        }
+                    }
+                }
+                if (binCount != 0) {
+                	// 判断是否要将链表转换为红黑树，临界值和 HashMap 一样，也是 8
+                    if (binCount >= TREEIFY_THRESHOLD)
+					// 这个方法和 HashMap 中稍微有一点点不同，那就是它不是一定会进行红黑树转换，
+                    // 如果当前数组的长度小于 64，那么会选择进行数组扩容，而不是转换为红黑树
+                        treeifyBin(tab, i);
+                    if (oldVal != null)
+                        return oldVal;
+                    break;
+                }
+            }
+        }
+        addCount(1L, binCount);
+        return null;
+    }
+```
+#### 初始化数组:initTable
+```Java
+    /**
+     * Initializes table, using the size recorded in sizeCtl.
+     */
+    private final Node<K,V>[] initTable() {
+        Node<K,V>[] tab; int sc;
+        while ((tab = table) == null || tab.length == 0) {
+            // 初始化的"功劳"被其他线程"抢去"了
+            if ((sc = sizeCtl) < 0)
+                Thread.yield(); // lost initialization race; just spin
+            // CAS 一下，将 sizeCtl 设置为 -1，代表抢到了锁
+            else if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {
+                try {
+                    if ((tab = table) == null || tab.length == 0) {
+                        // DEFAULT_CAPACITY 默认初始容量是 16
+                        int n = (sc > 0) ? sc : DEFAULT_CAPACITY;
+                        @SuppressWarnings("unchecked")
+                        Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
+                        // 将这个数组赋值给 table，table 是 volatile 的
+                        table = tab = nt;
+                        // 如果 n 为 16 的话，那么这里 sc = 12
+                        // 其实就是 0.75 * n
+                        sc = n - (n >>> 2);
+                    }
+                } finally {
+                    // 设置 sizeCtl 为 sc，我们就当是 12 吧
+                    sizeCtl = sc;
+                }
+                break;
+            }
+        }
+        return tab;
+    }
+```
+
+#### 链表转红黑树: treeifyBin
+```Java
+    /**
+     * Replaces all linked nodes in bin at given index unless table is
+     * too small, in which case resizes instead.
+     */
+    private final void treeifyBin(Node<K,V>[] tab, int index) {
+        Node<K,V> b; int n, sc;
+        if (tab != null) {
+            // MIN_TREEIFY_CAPACITY 为 64
+            // 所以，如果数组长度小于 64 的时候，其实也就是 32 或者 16 或者更小的时候，会进行数组扩容
+            if ((n = tab.length) < MIN_TREEIFY_CAPACITY)
+                tryPresize(n << 1);
+            // b 是头结点
+            else if ((b = tabAt(tab, index)) != null && b.hash >= 0) {
+                // 加锁
+                synchronized (b) {
+                    if (tabAt(tab, index) == b) {
+                        // 下面就是遍历链表，建立一颗红黑树
+                        TreeNode<K,V> hd = null, tl = null;
+                        for (Node<K,V> e = b; e != null; e = e.next) {
+                            TreeNode<K,V> p =
+                                new TreeNode<K,V>(e.hash, e.key, e.val,
+                                                  null, null);
+                            if ((p.prev = tl) == null)
+                                hd = p;
+                            else
+                                tl.next = p;
+                            tl = p;
+                        }
+                        // 将红黑树设置到数组相应位置中
+                        setTabAt(tab, index, new TreeBin<K,V>(hd));
+                    }
+                }
+            }
+        }
+    }
+```
+#### 扩容：tryPresize
+```Java
+    /**
+     * Tries to presize table to accommodate the given number of elements.
+     *
+     * @param size number of elements (doesn't need to be perfectly accurate)
+     */
+    private final void tryPresize(int size) {
+        int c = (size >= (MAXIMUM_CAPACITY >>> 1)) ? MAXIMUM_CAPACITY :
+            tableSizeFor(size + (size >>> 1) + 1);
+        int sc;
+        while ((sc = sizeCtl) >= 0) {
+            Node<K,V>[] tab = table; int n;
+            if (tab == null || (n = tab.length) == 0) {
+                n = (sc > c) ? sc : c;
+                if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {
+                    try {
+                        if (table == tab) {
+                            @SuppressWarnings("unchecked")
+                            Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
+                            table = nt;
+                            sc = n - (n >>> 2);
+                        }
+                    } finally {
+                        sizeCtl = sc;
+                    }
+                }
+            }
+            else if (c <= sc || n >= MAXIMUM_CAPACITY)
+                break;
+            else if (tab == table) {
+                int rs = resizeStamp(n);
+                if (sc < 0) {
+                    Node<K,V>[] nt;
+                    if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
+                        sc == rs + MAX_RESIZERS || (nt = nextTable) == null ||
+                        transferIndex <= 0)
+                        break;
+                    if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+                        transfer(tab, nt);
+                }
+                else if (U.compareAndSwapInt(this, SIZECTL, sc,
+                                             (rs << RESIZE_STAMP_SHIFT) + 2))
+                    transfer(tab, null);
+            }
+        }
+    }
+```
