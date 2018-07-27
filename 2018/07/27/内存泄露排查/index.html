@@ -8,23 +8,23 @@
   <link rel="dns-prefetch" href="https://chyi0425.github.io">
   <title>内存泄露排查 | Alex&#39;s blog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="版本 作者 时间     v1.0 小浣熊 2018-07-28    问题爆发 2018-07-17 早上收到反馈重排服务全部挂掉 排除日志，发现每分钟请求才300左右，远远没有达到瓶颈 Atenz发给截图，发现模型文件加载日期为20180708 Atenz晚上已经把一批次服务重启，留了一组服务以供排查  一共2个问题  模型文件过期  服务突然崩溃  问题排查模型文件的问题，是由于定时任">
+  <meta name="description" content="版本 作者 时间     v1.0 小浣熊 2018-07-24    问题爆发 2018-07-17 早上收到反馈重排服务全部挂掉 排除日志，发现每分钟请求才300左右，远远没有达到瓶颈 Atenz发给截图，发现模型文件加载日期为20180708 Atenz晚上已经把一批次服务重启，留了一组服务以供排查  一共2个问题  模型文件过期  服务突然崩溃  问题排查模型文件的问题，是由于定时任">
 <meta name="keywords" content="Java,JVM,douyu">
 <meta property="og:type" content="article">
 <meta property="og:title" content="内存泄露排查">
 <meta property="og:url" content="https://chyi0425.github.io/2018/07/27/内存泄露排查/index.html">
 <meta property="og:site_name" content="Alex&#39;s blog">
-<meta property="og:description" content="版本 作者 时间     v1.0 小浣熊 2018-07-28    问题爆发 2018-07-17 早上收到反馈重排服务全部挂掉 排除日志，发现每分钟请求才300左右，远远没有达到瓶颈 Atenz发给截图，发现模型文件加载日期为20180708 Atenz晚上已经把一批次服务重启，留了一组服务以供排查  一共2个问题  模型文件过期  服务突然崩溃  问题排查模型文件的问题，是由于定时任">
+<meta property="og:description" content="版本 作者 时间     v1.0 小浣熊 2018-07-24    问题爆发 2018-07-17 早上收到反馈重排服务全部挂掉 排除日志，发现每分钟请求才300左右，远远没有达到瓶颈 Atenz发给截图，发现模型文件加载日期为20180708 Atenz晚上已经把一批次服务重启，留了一组服务以供排查  一共2个问题  模型文件过期  服务突然崩溃  问题排查模型文件的问题，是由于定时任">
 <meta property="og:locale" content="en">
 <meta property="og:image" content="https://chyi0425.github.io/img/1532511452.png">
 <meta property="og:image" content="https://chyi0425.github.io/img/1532511499.png">
 <meta property="og:image" content="https://chyi0425.github.io/img/1532511735.png">
 <meta property="og:image" content="https://chyi0425.github.io/img/1532512000.png">
 <meta property="og:image" content="https://chyi0425.github.io/img/1532512012.png">
-<meta property="og:updated_time" content="2018-07-27T06:10:45.215Z">
+<meta property="og:updated_time" content="2018-07-27T06:39:17.786Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="内存泄露排查">
-<meta name="twitter:description" content="版本 作者 时间     v1.0 小浣熊 2018-07-28    问题爆发 2018-07-17 早上收到反馈重排服务全部挂掉 排除日志，发现每分钟请求才300左右，远远没有达到瓶颈 Atenz发给截图，发现模型文件加载日期为20180708 Atenz晚上已经把一批次服务重启，留了一组服务以供排查  一共2个问题  模型文件过期  服务突然崩溃  问题排查模型文件的问题，是由于定时任">
+<meta name="twitter:description" content="版本 作者 时间     v1.0 小浣熊 2018-07-24    问题爆发 2018-07-17 早上收到反馈重排服务全部挂掉 排除日志，发现每分钟请求才300左右，远远没有达到瓶颈 Atenz发给截图，发现模型文件加载日期为20180708 Atenz晚上已经把一批次服务重启，留了一组服务以供排查  一共2个问题  模型文件过期  服务突然崩溃  问题排查模型文件的问题，是由于定时任">
 <meta name="twitter:image" content="https://chyi0425.github.io/img/1532511452.png">
   
     <link rel="alternative" href="/atom.xml" title="Alex&#39;s blog" type="application/atom+xml">
@@ -197,7 +197,7 @@
 <tr>
 <td>v1.0</td>
 <td>小浣熊</td>
-<td>2018-07-28</td>
+<td>2018-07-24</td>
 </tr>
 </tbody>
 </table>
@@ -528,11 +528,11 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
+                <a href="javascript:void(0)" class="js-tag color1">collection</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
               </li>
              
               <li class="article-tag-list-item">
