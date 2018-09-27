@@ -242,14 +242,18 @@ ArrayList底层使用的是动态数组，我们常用到的构造方法一般�
 
     private void ensureCapacityInternal(int minCapacity) {
         if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
+            // 进入此处表示构造方法是无参的构造方法 且minCapacity入参为1，最后minCapacity肯定是10
             minCapacity = Math.max(DEFAULT_CAPACITY, minCapacity);
         }
 
         ensureExplicitCapacity(minCapacity);
     }
-    private void ensureExplicitCapacity(int minCapacity) {
-        modCount++;
 
+    //判断是否需要扩容
+    private void ensureExplicitCapacity(int minCapacity) {
+        //列表结构被修改的次数,用于保证线程安全,如果在迭代的时候该值意外被修改,那么会报ConcurrentModificationException错
+        modCount++;
+        // 如果最小需要空间比elementData的内存空间要大，则需要扩容
         // overflow-conscious code
         if (minCapacity - elementData.length > 0)
             grow(minCapacity);
@@ -262,14 +266,107 @@ ArrayList底层使用的是动态数组，我们常用到的构造方法一般�
      */
     private void grow(int minCapacity) {
         // overflow-conscious code
+        // 1 记录之前的数组长度
         int oldCapacity = elementData.length;
+        // 2. 新数组的大小=老数组大小+老数组大小的一半
         int newCapacity = oldCapacity + (oldCapacity >> 1);
+        // 3. 判断扩容之后的大小newCapacity是否能装够minCapacity个元素，不够就将数组长度设置为需要的长度
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
+
+        // 4. 判断新数组容量是否大于最大值 如果新数组容量比最大值(Integer.MAX_VALUE-8)还大，那么交给hugeCapacity()去处理，该抛异常就抛异常
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
         // minCapacity is usually close to size, so this is a win:
+        // 复制数组
         elementData = Arrays.copyOf(elementData, newCapacity);
     }
 
+    // 巨大容量
+    private static int hugeCapacity(int minCapacity) {
+        // 判断是否溢出
+        if (minCapacity < 0) // overflow
+            throw new OutOfMemoryError();
+        return (minCapacity > MAX_ARRAY_SIZE) ?
+            Integer.MAX_VALUE :
+            MAX_ARRAY_SIZE;
+    }
+```
+add的主要逻辑如下
+1. 如果原数组为空，那么第一次添加元素给定默认大小10.
+2. 修改次数modCount标致自增1，如果当前数组已使用长度size加一后大于当前的数组长度，则调用grow方法，增长数组，grow方法会将当前数组的长度变为原来容量的1.5倍。 
+3. 确保新增的数据有地方存储之后，则将新元素添加到位于size的位置上。 
+4. 返回添加成功布尔值。
+
+#### add(int index, E element)
+
+在ArrayList的index位置，添加元素element
+
+```Java
+    public void add(int index, E element) {
+        // 判断是否越界
+        rangeCheckForAdd(index);
+        // 判断是否需要扩容
+        ensureCapacityInternal(size + 1);  // Increments modCount!!
+        // 将elementData从index位置开始，复制到elementData的index+1开始的连续空间
+        System.arraycopy(elementData, index, elementData, index + 1,
+                         size - index);
+        // 在elementData的index位置赋值element
+        elementData[index] = element;
+        // 记录当前真实数据的个数
+        size++;
+    }
+
+    //index不合法时,抛IndexOutOfBoundsException
+    private void rangeCheckForAdd(int index) {
+        if (index > size || index < 0)
+            throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
+    }
+```
+
+1. 确保数插入的位置小于等于当前数组长度，并且不小于0，否则抛出异常 
+2. 确保数组已使用长度（size）加1之后足够存下 下一个数据 
+3. 修改次数（modCount）标识自增1，如果当前数组已使用长度（size）加1后的大于当前的数组长度，则调用grow方法，增长数组 
+4. grow方法会将当前数组的长度变为原来容量的1.5倍。 
+5. 确保有足够的容量之后，使用System.arraycopy 将需要插入的位置（index）后面的元素统统往后移动一位。 
+6. 将新的数据内容存放到数组的指定位置（index）上
+
+#### addAll(Collection<? extends E> c)
+
+```Java
+    public boolean addAll(Collection<? extends E> c) {
+        // 生成一个包含集合c所有元素的数组
+        Object[] a = c.toArray();
+        // 记录需要插入的数组长度
+        int numNew = a.length;
+        // 判断一下是否需要扩容
+        ensureCapacityInternal(size + numNew);  // Increments modCount
+        // 将a数组全部复制到elementData末尾处
+        System.arraycopy(a, 0, elementData, size, numNew);
+        // 标记当前elementData已有的元素个数
+        size += numNew;
+        // 是否插入成功
+        return numNew != 0;
+    }
+```
+
+#### addAll(int index, Collection<? extends E> c)
+
+```Java
+    public boolean addAll(int index, Collection<? extends E> c) {
+        rangeCheckForAdd(index);
+
+        Object[] a = c.toArray();
+        int numNew = a.length;
+        ensureCapacityInternal(size + numNew);  // Increments modCount
+
+        int numMoved = size - index;
+        if (numMoved > 0)
+            System.arraycopy(elementData, index, elementData, index + numNew,
+                             numMoved);
+
+        System.arraycopy(a, 0, elementData, index, numNew);
+        size += numNew;
+        return numNew != 0;
+    }
 ```
