@@ -354,19 +354,29 @@ add的主要逻辑如下
 
 ```Java
     public boolean addAll(int index, Collection<? extends E> c) {
+        // 检查下标是否越界
         rangeCheckForAdd(index);
 
+        // 生成包含集合c的所有元素的数组
         Object[] a = c.toArray();
+        // 记录需要插入的数组长度
         int numNew = a.length;
+        // 判断是否需要扩容
         ensureCapacityInternal(size + numNew);  // Increments modCount
 
+        // 需要往后移动的元素个数
         int numMoved = size - index;
-        if (numMoved > 0)
+        if (numMoved > 0) // 后面有元素才需要复制，否则相当于插入到末尾
+            // 将elementData的从index开始的numMoved个元素赋值到index+numNew处
             System.arraycopy(elementData, index, elementData, index + numNew,
                              numMoved);
-
+        // 将a复制到elementData的index处
         System.arraycopy(a, 0, elementData, index, numNew);
+        // 标记当前elementData已有元素的个数
         size += numNew;
+        // 是否插入成功: c集合不为空就行
         return numNew != 0;
     }
 ```
+
+#### 删除元素
