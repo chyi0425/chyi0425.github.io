@@ -13,11 +13,11 @@ toc: true
 
 比如链表和数组：
 
-![示意图](/img/tree-java.jpg)
+![示意图](/img/tree-java.png)
 
 而树，非线性结构的典型例子，不再是一对一，而变成了**一对多**（而图则可以是 多对多），如下图所示：
 
-![示意图](/img/tree-java-2.jpg)
+![示意图](/img/tree-java-2.png)
 
 可以看到:
 
@@ -32,7 +32,7 @@ toc: true
 
 根节点、父亲节点、孩子节点、叶子节点如上所述。
 
-![示意图](/img/tree-java-3.jpg)
+![示意图](/img/tree-java-3.png)
 
 ### 节点的度
 
@@ -98,9 +98,9 @@ public class TreeNodeArrImpl {
 ```
 
 用数组实现的树表示下面的树
-![示意图](/img/tree-java-4.jpg)
+![示意图](/img/tree-java-4.png)
 
-![示意图](/img/tree-java-5.jpg)
+![示意图](/img/tree-java-5.png)
 
 数组实现的树节点使用角标表示父亲的索引，下面用链表表示一个节点和一棵树：
 
