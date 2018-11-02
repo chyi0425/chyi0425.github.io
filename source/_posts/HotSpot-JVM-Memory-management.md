@@ -20,7 +20,7 @@ GC需要做3件事情：
 * VM的一些静态数据结构里指向GC堆里的对象的引用，例如说HotSpot VM里的Universe里有很多这样的引用。
 * JNI handles，包括global handles和local handles
 
-https://www.zhihu.com/question/53613423/answer/135743258
+[详见](https://www.zhihu.com/question/53613423/answer/135743258)
 
 我们把 GC 管理的内存称为 **堆（heap）**，垃圾收集启动的时机取决于各个垃圾收集器，通常，垃圾收集发生于整个堆或堆的部分已经被使用光了，或者使用的空间达到了某个百分比阈值。这些后面都会具体说，这里的每一句话都是对应了某些场景的。
 
