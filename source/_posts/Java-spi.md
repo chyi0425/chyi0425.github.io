@@ -110,18 +110,71 @@ ServiceLoader<DemoService> serviceLoader = ServiceLoader.load(DemoService.class)
         acc = (System.getSecurityManager() != null) ? AccessController.getContext() : null;
         reload();
     }
+
+    public void reload() {
+        providers.clear(); // 清空缓存
+        lookupIterator = new LazyIterator(service, loader);
+    }
 ```
+
+这样一个ServiceLoader实例就创建成功了。在创建的过程中，我们看到还实例化了一个LazyIterator，该类下边会说。
+
+2、获取迭代器并迭代
+
+```Java
+    Iterator<DemoService> it = serviceLoader.iterator();
+    while (it.hasNext()) {
+        DemoService demoService = it.next();
+        System.out.println("class:" + demoService.getClass().getName() + "***" +demoService.sayHi("World"));
+    }
+```
+
+```Java
+    public Iterator<S> iterator() {
+        return new Iterator<S>() {
+
+            Iterator<Map.Entry<String,S>> knownProviders
+                = providers.entrySet().iterator();
+
+
+            public boolean hasNext() {
+                if (knownProviders.hasNext())
+                    return true;
+                return lookupIterator.hasNext();
+            }
+
+            public S next() {
+                if (knownProviders.hasNext())
+                    return knownProviders.next().getValue();
+                return lookupIterator.next();
+            }
+
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+
+        };
+    }
+```
+
+从查找过程的hashNext()和迭代过程next()来看。
+* hashNext();<font color=red>先从provider（缓存）中查找，如果有，直接返回true；如果没有，通过LazyIterator来进行查找。</font>
+* next();<font color=red>先从provider（缓存）中直接获取，如果有，直接返回实现类对象实例；如果没有，通过LazyIterator来进行获取。</font>
+
+我们来看一下LazyIterator这个类，首先看一下他的属性
+
+其中，service和loader在上述实例化ServiceLoader的时候就已经实例化好了。
 
 ```Java
 private class LazyIterator
         implements Iterator<S>
     {
 
-        Class<S> service;
-        ClassLoader loader;
-        Enumeration<URL> configs = null;
-        Iterator<String> pending = null;
-        String nextName = null;
+        Class<S> service;   // 接口
+        ClassLoader loader; // 类加载器
+        Enumeration<URL> configs = null;    // 存放配置文件
+        Iterator<String> pending = null;    // 存放配置文件的类容，并存储为ArrayList，即存储多个实现类名称
+        String nextName = null; // 当前处理的实现类名称
 
         private LazyIterator(Class<S> service, ClassLoader loader) {
             this.service = service;
@@ -209,3 +262,15 @@ private class LazyIterator
 
     }
 ```
+
+hasNextService()中，核心实现如下：
+
+* 首先使用loader加载配置文件，此时找到了META-INF/services/com.chiyi.spi.DemoService文件；
+* 然后解析这个配置文件，并将各个实现类名称存储在pending的ArrayList中;
+* 最后指定nextName; --> 此时nextName=com.chiyi.spi.impl.EnglishDemoServiceImpl
+
+nextService()中，核心实现如下：
+
+* 首先加载nextName代表的类Class，这里为com.chiyi.spi.impl.EnglishDemoServiceImpl；
+* 之后创建该类的实例，并转型为所需的接口类型
+* 最后存储在provider中，供后续查找，最后返回转型后的实现类实例。
