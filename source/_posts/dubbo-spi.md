@@ -104,3 +104,24 @@ public @interface SPI {
 
 ## 获取ExtensionLoader
 
+```Java
+ExtensionLoader<Protocol> loader = ExtensionLoader.getExtensionLoader(Protocol.class);
+```
+ExtensionLoader可以类比为JDK-SPI中的**ServiceLoader**。
+
+首先来看一下ExtensionLoader的类属性：
+
+```Java
+    /** 存放SPI文件的三个目录,其中META-INF/services/也是jdk的SPI文件的存放目录 */
+    private static final String SERVICES_DIRECTORY = "META-INF/services/";
+
+    private static final String DUBBO_DIRECTORY = "META-INF/dubbo/";
+
+    private static final String DUBBO_INTERNAL_DIRECTORY = DUBBO_DIRECTORY + "internal/";
+
+    private static final Pattern NAME_SEPARATOR = Pattern.compile("\\s*[,]+\\s*");
+    /** key: SPI接口Class value: 该接口的ExtensionLoader */
+    private static final ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<Class<?>, ExtensionLoader<?>>();
+
+    private static final ConcurrentMap<Class<?>, Object> EXTENSION_INSTANCES = new ConcurrentHashMap<Class<?>, Object>();
+```
