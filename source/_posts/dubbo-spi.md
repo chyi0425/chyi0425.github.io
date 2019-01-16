@@ -122,6 +122,70 @@ ExtensionLoader可以类比为JDK-SPI中的**ServiceLoader**。
     private static final Pattern NAME_SEPARATOR = Pattern.compile("\\s*[,]+\\s*");
     /** key: SPI接口Class value: 该接口的ExtensionLoader */
     private static final ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<Class<?>, ExtensionLoader<?>>();
-
+    /** key: SPI接口Class value: SPI实现类的对象实例 */
     private static final ConcurrentMap<Class<?>, Object> EXTENSION_INSTANCES = new ConcurrentHashMap<Class<?>, Object>();
+```
+注意：上述的都是类属性，即所有该类的实例都共享。而后边的实例属性就属于每一个类的实例私有。
+
+再来看一下ExtensionLoader的实例属性：
+
+```Java
+    /** SPI接口Class */
+    private final Class<?> type;
+    /** SPI实现类对象实例的创建工厂 */
+    private final ExtensionFactory objectFactory;
+    /** key: ExtensionClass的Class value: SPI实现类的key */
+    private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<Class<?>, String>();
+    /** 存放所有的extensionClass */
+    private final Holder<Map<String, Class<?>>> cachedClasses = new Holder<Map<String, Class<?>>>();
+
+    private final Map<String, Activate> cachedActivates = new ConcurrentHashMap<String, Activate>();
+    /** 缓存创建好的extensionClass实例 */
+    private final ConcurrentMap<String, Holder<Object>> cachedInstances = new ConcurrentHashMap<String, Holder<Object>>();
+    /** 缓存创建好的适配类实例 */
+    private final Holder<Object> cachedAdaptiveInstance = new Holder<Object>();
+    /** 存储类上带有@Adaptive注解的Class */
+    private volatile Class<?> cachedAdaptiveClass = null;
+    /** 默认的SPI文件中的key */
+    private String cachedDefaultName;
+    /** 存储在创建适配类实例这个过程中发生的错误 */
+    private volatile Throwable createAdaptiveInstanceError;
+    /** 存放具有一个type入参的构造器的实现类的Class对象 */
+    private Set<Class<?>> cachedWrapperClasses;
+    /** key :实现类的全类名  value: exception, 防止真正的异常被吞掉 */
+    private Map<String, IllegalStateException> exceptions = new ConcurrentHashMap<String, IllegalStateException>();
+```
+
+来看一下getExtensionLoader(Class<T> type)的源码：
+
+```Java
+    @SuppressWarnings("unchecked")
+    public static <T> ExtensionLoader<T> getExtensionLoader(Class<T> type) {
+        // 1 校验入参type：非空 + 接口 + 含有@SPI注解
+        if (type == null)
+            throw new IllegalArgumentException("Extension type == null");
+        if (!type.isInterface()) {
+            throw new IllegalArgumentException("Extension type(" + type + ") is not interface!");
+        }
+        if (!withExtensionAnnotation(type)) {
+            throw new IllegalArgumentException("Extension type(" + type +
+                    ") is not extension, because WITHOUT @" + SPI.class.getSimpleName() + " Annotation!");
+        }
+        // 2 根据type接口从全局缓存EXTENSION_LOADERS中获取ExtensionLoader,如果有直接返回;如果没有,则先创建,之后放入缓存,最后返回
+        ExtensionLoader<T> loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
+        if (loader == null) {
+            EXTENSION_LOADERS.putIfAbsent(type, new ExtensionLoader<T>(type));
+            loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
+        }
+        return loader;
+    }
+```
+
+创建ExtensionLoader：
+
+```Java
+    private ExtensionLoader(Class<?> type) {
+        this.type = type;
+        objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
+    }
 ```
