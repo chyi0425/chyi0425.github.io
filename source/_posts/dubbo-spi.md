@@ -189,3 +189,74 @@ ExtensionLoader可以类比为JDK-SPI中的**ServiceLoader**。
         objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
     }
 ```
+
+当前创建的ExtensionLoader对象（我们取名为ExtensionLoader对象1）的type是com.alibaba.dubbo.rpc.Protocol，所以此时会执行：ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension()。
+
+首先是创建ExtensionFactory，通过上边核心类部分ExtensionFactory接口的源码可以看出，此类也是一个SPI接口类，且没有指定默认的实现类的key。
+
+```Java
+ExtensionLoader.getExtensionLoader(ExtensionFactory.class)
+```
+
+下面的代码与上述的过程相似，只是此时创建的另外一个ExtensionLoader对象（我们取名为ExtensionLoader对象2）的type是com.alibaba.dubbo.common.extension.ExtensionFactory，而objectFactory是null。之后，这个ExtensionLoader对象2被放入EXTENSION_LOADERS缓存。这里给出ExtensionFactory的定义，该类也极其重要。
+
+
+```Java
+@SPI
+public interface ExtensionFactory {
+
+    /**
+     * Get extension.
+     *
+     * @param type object type.
+     * @param name object name.
+     * @return object instance.
+     */
+    <T> T getExtension(Class<T> type, String name);
+
+}
+```
+
+之后执行ExtensionLoader对象2的getAdaptiveExtension()方法。
+
+```Java
+    @SuppressWarnings("unchecked")
+    public T getAdaptiveExtension() {
+        // 首先从cachedAdaptiveInstance缓存中获取AdaptiveExtension实例,如果不为null, 直接返回;
+        Object instance = cachedAdaptiveInstance.get();
+        if (instance == null) {
+            if (createAdaptiveInstanceError == null) {
+                synchronized (cachedAdaptiveInstance) {
+                    instance = cachedAdaptiveInstance.get();
+                    if (instance == null) {
+                        try {
+                            // 如果为null, 先创建AdaptiveExtension实例, 之后放入cachedAdaptiveInstance缓存中,最后返回
+                            instance = createAdaptiveExtension();
+                            cachedAdaptiveInstance.set(instance);
+                        } catch (Throwable t) {
+                            createAdaptiveInstanceError = t;
+                            throw new IllegalStateException("fail to create adaptive instance: " + t.toString(), t);
+                        }
+                    }
+                }
+            } else {
+                throw new IllegalStateException("fail to create adaptive instance: " + createAdaptiveInstanceError.toString(), createAdaptiveInstanceError);
+            }
+        }
+
+        return (T) instance;
+    }
+```
+
+来看createAdaptiveExtension()创建AdaptiveExtension的源码：
+
+```Java
+    @SuppressWarnings("unchecked")
+    private T createAdaptiveExtension() {
+        try {
+            return injectExtension((T) getAdaptiveExtensionClass().newInstance());
+        } catch (Exception e) {
+            throw new IllegalStateException("Can not create adaptive extension " + type + ", cause: " + e.getMessage(), e);
+        }
+    }
+```
