@@ -16,7 +16,7 @@
 <meta property="og:site_name" content="Alex&#39;s blog">
 <meta property="og:description" content="为什么有内存屏障 每个CPU都会有自己的缓存（有的甚至L1,L2,L3），缓存的目的就是为了提高性能，避免每次都要向内存取。但是这样的弊端也很明显：不能实时的和内存发生信息交换，分在不同CPU执行的不同线程对同一个变量的缓存值不同。 用volatile关键字修饰变量可以解决上述问题，那么volatile是如何做到这一点的呢？那就是内存屏障，内存屏障是硬件层的概念，不同的硬件平台实现内存屏障的手段并">
 <meta property="og:locale" content="en">
-<meta property="og:updated_time" content="2018-10-15T05:29:26.835Z">
+<meta property="og:updated_time" content="2018-11-01T08:14:58.938Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="内存屏障">
 <meta name="twitter:description" content="为什么有内存屏障 每个CPU都会有自己的缓存（有的甚至L1,L2,L3），缓存的目的就是为了提高性能，避免每次都要向内存取。但是这样的弊端也很明显：不能实时的和内存发生信息交换，分在不同CPU执行的不同线程对同一个变量的缓存值不同。 用volatile关键字修饰变量可以解决上述问题，那么volatile是如何做到这一点的呢？那就是内存屏障，内存屏障是硬件层的概念，不同的硬件平台实现内存屏障的手段并">
@@ -208,8 +208,26 @@
 <li>volatile的内存屏障策略非常严格保守、悲观且毫无安全感的心态</li>
 </ul>
 <blockquote>
-<p>在每个volatile写操作前插入StoreStore屏障，在写操作之后写入StoreLoad屏障；<br>在每个volatile读操作前插入LoadLoad屏障，在读操作后插入LoadStore</p>
+<p>在每个volatile写操作前插入StoreStore屏障，在写操作之后写入StoreLoad屏障；<br>在每个volatile读操作前插入LoadLoad屏障，在读操作后插入LoadStore屏障；</p>
 </blockquote>
+<ul>
+<li>由于内存屏障的作用，避免了volatile变量和其他指令重排序、线程之前实现了通信，使得volatile表现出了锁的特性。</li>
+</ul>
+<h2 id="final语义中的内存屏障"><a href="#final语义中的内存屏障" class="headerlink" title="final语义中的内存屏障"></a>final语义中的内存屏障</h2><ul>
+<li>对于final域，编译器和CPU会遵循两个排序规则：</li>
+</ul>
+<blockquote>
+<ol>
+<li>新建对象过程中，构造体中对final域的初始化写入和这个对象赋值给其他引用变量，这两个操作不能重排序；</li>
+<li>初次读包含final域的对象引用和读取这个final域，这2个操作不能重排序；</li>
+</ol>
+</blockquote>
+<ul>
+<li>总之上面规则的意思可以这样理解，必需保证一个对象的所有final域被写入完毕后才能引用和读取。这也是内存屏障的起的作用：</li>
+<li>写final域：在编译器写final域完毕，构造体结束之前，会插入一个StoreStore屏障，保证前面的对final写入对其他线程/CPU可见，并阻止重排序。</li>
+<li>读final域：在上述规则2中，两步操作不能重排序的机理就是在读final域前插入了LoadLoad屏障。</li>
+<li>X86处理器中，由于CPU不会对写-写操作进行重排序，所以StoreStore屏障会被省略；而X86也不会对逻辑上有先后依赖关系的操作进行重排序，所以LoadLoad也会变省略。</li>
+</ul>
 
       
 
@@ -361,7 +379,7 @@
                 </span>
                 <span class="tooltip-content">
                     <div class="toc-article">
-                    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么有内存屏障"><span class="toc-number">1.</span> <span class="toc-text">为什么有内存屏障</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#内存屏障是什么"><span class="toc-number">2.</span> <span class="toc-text">内存屏障是什么</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Java内存屏障"><span class="toc-number">3.</span> <span class="toc-text">Java内存屏障</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#volatile语义中的内存屏障"><span class="toc-number">4.</span> <span class="toc-text">volatile语义中的内存屏障</span></a></li></ol>
+                    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么有内存屏障"><span class="toc-number">1.</span> <span class="toc-text">为什么有内存屏障</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#内存屏障是什么"><span class="toc-number">2.</span> <span class="toc-text">内存屏障是什么</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Java内存屏障"><span class="toc-number">3.</span> <span class="toc-text">Java内存屏障</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#volatile语义中的内存屏障"><span class="toc-number">4.</span> <span class="toc-text">volatile语义中的内存屏障</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#final语义中的内存屏障"><span class="toc-number">5.</span> <span class="toc-text">final语义中的内存屏障</span></a></li></ol>
                     </div>
                 </span>
             </div>
@@ -390,7 +408,7 @@
   <div class="outer">
     <div id="footer-info">
     	<div class="footer-left">
-    		&copy; 2018 Alex
+    		&copy; 2019 Alex
     	</div>
       	<div class="footer-right">
       		<a href="http://hexo.io/" target="_blank">Hexo</a>  Theme <a href="https://github.com/litten/hexo-theme-yilia" target="_blank">Yilia</a> by Litten
@@ -473,6 +491,14 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
           <ul class="article-tag-list" q-show="showTags">
              
               <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">Transaction</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">algorithm</a>
+              </li>
+             
+              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">Java</a>
               </li>
              
@@ -481,15 +507,7 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">algorithm</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">JVM</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">Interview</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -501,7 +519,27 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
+                <a href="javascript:void(0)" class="js-tag color2">ClassLoader</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Dubbo</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">JDK</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">Interview</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Redis</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">Memcache</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -509,11 +547,19 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+                <a href="javascript:void(0)" class="js-tag color1">dubbo</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Collection</a>
+                <a href="javascript:void(0)" class="js-tag color4">sql</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">B+Tree</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -525,15 +571,39 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Redis</a>
+                <a href="javascript:void(0)" class="js-tag color1">Mysql</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
+                <a href="javascript:void(0)" class="js-tag color4">udp</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">tcp</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color3">network</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">python</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Collection</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">bit</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
               </li>
              
               <li class="article-tag-list-item">

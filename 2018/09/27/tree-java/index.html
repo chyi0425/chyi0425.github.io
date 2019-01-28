@@ -9,23 +9,23 @@
   <title>tree-java | Alex&#39;s blog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="description" content="数据结构，指的是数据的存储形式，常见的有线性结构（数组、链表，队列、栈），还有非线性结构（树、图等）。 什么是树线性结构中，一个节点至多只有一个头节点，至多只有一个尾节点，彼此连接起来是一条完整的线。 比如链表和数组：  而树，非线性结构的典型例子，不再是一对一，而变成了一对多（而图则可以是 多对多），如下图所示：  可以看到:  图中的结构就像一棵倒过来的树，最顶部的节点就是“根节点 (root">
-<meta name="keywords" content="Java,algorithm">
+<meta name="keywords" content="algorithm,Java">
 <meta property="og:type" content="article">
 <meta property="og:title" content="tree-java">
 <meta property="og:url" content="https://chyi0425.github.io/2018/09/27/tree-java/index.html">
 <meta property="og:site_name" content="Alex&#39;s blog">
 <meta property="og:description" content="数据结构，指的是数据的存储形式，常见的有线性结构（数组、链表，队列、栈），还有非线性结构（树、图等）。 什么是树线性结构中，一个节点至多只有一个头节点，至多只有一个尾节点，彼此连接起来是一条完整的线。 比如链表和数组：  而树，非线性结构的典型例子，不再是一对一，而变成了一对多（而图则可以是 多对多），如下图所示：  可以看到:  图中的结构就像一棵倒过来的树，最顶部的节点就是“根节点 (root">
 <meta property="og:locale" content="en">
-<meta property="og:image" content="https://chyi0425.github.io/img/tree-java.jpg">
-<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-2.jpg">
-<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-3.jpg">
-<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-4.jpg">
-<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-5.jpg">
-<meta property="og:updated_time" content="2018-09-27T03:36:40.710Z">
+<meta property="og:image" content="https://chyi0425.github.io/img/tree-java.png">
+<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-2.png">
+<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-3.png">
+<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-4.png">
+<meta property="og:image" content="https://chyi0425.github.io/img/tree-java-5.png">
+<meta property="og:updated_time" content="2018-10-18T02:38:53.002Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="tree-java">
 <meta name="twitter:description" content="数据结构，指的是数据的存储形式，常见的有线性结构（数组、链表，队列、栈），还有非线性结构（树、图等）。 什么是树线性结构中，一个节点至多只有一个头节点，至多只有一个尾节点，彼此连接起来是一条完整的线。 比如链表和数组：  而树，非线性结构的典型例子，不再是一对一，而变成了一对多（而图则可以是 多对多），如下图所示：  可以看到:  图中的结构就像一棵倒过来的树，最顶部的节点就是“根节点 (root">
-<meta name="twitter:image" content="https://chyi0425.github.io/img/tree-java.jpg">
+<meta name="twitter:image" content="https://chyi0425.github.io/img/tree-java.png">
   
     <link rel="alternative" href="/atom.xml" title="Alex&#39;s blog" type="application/atom+xml">
   
@@ -188,9 +188,9 @@
         <p>数据结构，指的是数据的存储形式，常见的有线性结构（数组、链表，队列、栈），还有非线性结构（树、图等）。</p>
 <h2 id="什么是树"><a href="#什么是树" class="headerlink" title="什么是树"></a>什么是树</h2><p>线性结构中，一个节点至多只有一个头节点，至多只有一个尾节点，彼此连接起来是一条完整的线。</p>
 <p>比如链表和数组：</p>
-<p><img src="/img/tree-java.jpg" alt="示意图"></p>
+<p><img src="/img/tree-java.png" alt="示意图"></p>
 <p>而树，非线性结构的典型例子，不再是一对一，而变成了<strong>一对多</strong>（而图则可以是 多对多），如下图所示：</p>
-<p><img src="/img/tree-java-2.jpg" alt="示意图"></p>
+<p><img src="/img/tree-java-2.png" alt="示意图"></p>
 <p>可以看到:</p>
 <ul>
 <li>图中的结构就像一棵倒过来的树，最顶部的节点就是“根节点 (root 节点)”</li>
@@ -200,7 +200,7 @@
 <li>没有孩子节点的节点成为叶子节点 (leaf)</li>
 </ul>
 <h2 id="树的相关术语"><a href="#树的相关术语" class="headerlink" title="树的相关术语"></a>树的相关术语</h2><p>根节点、父亲节点、孩子节点、叶子节点如上所述。</p>
-<p><img src="/img/tree-java-3.jpg" alt="示意图"></p>
+<p><img src="/img/tree-java-3.png" alt="示意图"></p>
 <h3 id="节点的度"><a href="#节点的度" class="headerlink" title="节点的度"></a>节点的度</h3><p>一个节点<strong>直接含有</strong>的子树个数，叫做节点的度。比如上图中的 3 的度是 2，10 的度是 1。</p>
 <h3 id="树的度"><a href="#树的度" class="headerlink" title="树的度"></a>树的度</h3><p>一棵树中<strong>最大节点的度</strong>，即哪个节点的子节点最多，它的度就是 树的度。上图中树的度为 2 。</p>
 <h3 id="树的高度"><a href="#树的高度" class="headerlink" title="树的高度"></a>树的高度</h3><p>树的高度是从叶子节点开始，自底向上增加。</p>
@@ -216,8 +216,8 @@
 </ul>
 <h3 id="数组实现"><a href="#数组实现" class="headerlink" title="数组实现"></a>数组实现</h3><p>我们可以利用每个节点至多只有一个父节点这个特点，使用<strong>父节点表示法</strong>来实现一个节点：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TreeNodeArrImpl</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Object mData;   <span class="comment">// the data</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> mParent;    <span class="comment">// parent node</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">TreeNodeArrImpl</span><span class="params">(Object mData, <span class="keyword">int</span> mParent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mData = mData;</span><br><span class="line">        <span class="keyword">this</span>.mParent = mParent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">getmData</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> mData;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setmData</span><span class="params">(Object mData)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mData = mData;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">getmParent</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> mParent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setmParent</span><span class="params">(<span class="keyword">int</span> mParent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mParent = mParent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        TreeNodeArrImpl[] arrayTree = <span class="keyword">new</span> TreeNodeArrImpl[<span class="number">10</span>];</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>用数组实现的树表示下面的树<br><img src="/img/tree-java-4.jpg" alt="示意图"></p>
-<p><img src="/img/tree-java-5.jpg" alt="示意图"></p>
+<p>用数组实现的树表示下面的树<br><img src="/img/tree-java-4.png" alt="示意图"></p>
+<p><img src="/img/tree-java-5.png" alt="示意图"></p>
 <p>数组实现的树节点使用角标表示父亲的索引，下面用链表表示一个节点和一棵树：</p>
 <h3 id="链表表示的节点："><a href="#链表表示的节点：" class="headerlink" title="链表表示的节点："></a>链表表示的节点：</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LinkedTreeNode</span> </span>&#123;</span><br><span class="line">    <span class="comment">// the data</span></span><br><span class="line">    <span class="keyword">private</span> Object mData;</span><br><span class="line">    <span class="comment">// the parent node</span></span><br><span class="line">    <span class="keyword">private</span> LinkedTreeNode mParent;</span><br><span class="line">    <span class="comment">// the children nodes</span></span><br><span class="line">    <span class="keyword">private</span> List&lt;LinkedTreeNode&gt; mChildNodeList;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">LinkedTreeNode</span><span class="params">(Object mData, LinkedTreeNode mParent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mData = mData;</span><br><span class="line">        <span class="keyword">this</span>.mParent = mParent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">getmData</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> mData;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setmData</span><span class="params">(Object mData)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mData = mData;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> LinkedTreeNode <span class="title">getmParent</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> mParent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setmParent</span><span class="params">(LinkedTreeNode mParent)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mParent = mParent;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> List&lt;LinkedTreeNode&gt; <span class="title">getmChildNodeList</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> mChildNodeList;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setmChildNodeList</span><span class="params">(List&lt;LinkedTreeNode&gt; mChildNodeList)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.mChildNodeList = mChildNodeList;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>使用引用，而不是索引表示父亲与孩子节点。</p>
@@ -272,11 +272,11 @@
 		<ul class="article-tag-list">
 			 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">Java</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">algorithm</a>
         		</li>
       		 
         		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">algorithm</a>
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color5">Java</a>
         		</li>
       		
 		</ul>
@@ -413,7 +413,7 @@
   <div class="outer">
     <div id="footer-info">
     	<div class="footer-left">
-    		&copy; 2018 Alex
+    		&copy; 2019 Alex
     	</div>
       	<div class="footer-right">
       		<a href="http://hexo.io/" target="_blank">Hexo</a>  Theme <a href="https://github.com/litten/hexo-theme-yilia" target="_blank">Yilia</a> by Litten
@@ -496,6 +496,14 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
           <ul class="article-tag-list" q-show="showTags">
              
               <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">Transaction</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">algorithm</a>
+              </li>
+             
+              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">Java</a>
               </li>
              
@@ -504,15 +512,7 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">algorithm</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">JVM</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">Interview</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -524,7 +524,27 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
+                <a href="javascript:void(0)" class="js-tag color2">ClassLoader</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Dubbo</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">JDK</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">Interview</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Redis</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">Memcache</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -532,11 +552,19 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+                <a href="javascript:void(0)" class="js-tag color1">dubbo</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Collection</a>
+                <a href="javascript:void(0)" class="js-tag color4">sql</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">B+Tree</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -548,15 +576,39 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Redis</a>
+                <a href="javascript:void(0)" class="js-tag color1">Mysql</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
+                <a href="javascript:void(0)" class="js-tag color4">udp</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">tcp</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color3">network</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">python</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Collection</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">bit</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
               </li>
              
               <li class="article-tag-list-item">

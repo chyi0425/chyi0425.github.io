@@ -8,15 +8,22 @@
   <link rel="dns-prefetch" href="https://chyi0425.github.io">
   <title>redis数据结构以及内部编码 | Alex&#39;s blog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="keywords" content="Redis">
+  <meta name="description" content="redis有5种常用的数据结构：string、hash、list、set、zset,通过type [key]命令可以查看当前键的数据结构类型；每种数据结构都有不止一种相应的内部编码实现，redis会在合适的场景选择合适的内部编码，通过object encoding [key]可以查看内部编码。 这样设计的好处   改进内部编码，对外的数据结构和命令没有影响，外部用户无感知。 多种内部编码可在不同场">
+<meta name="keywords" content="Redis">
 <meta property="og:type" content="article">
 <meta property="og:title" content="redis数据结构以及内部编码">
 <meta property="og:url" content="https://chyi0425.github.io/2018/10/16/redis数据结构以及内部编码/index.html">
 <meta property="og:site_name" content="Alex&#39;s blog">
+<meta property="og:description" content="redis有5种常用的数据结构：string、hash、list、set、zset,通过type [key]命令可以查看当前键的数据结构类型；每种数据结构都有不止一种相应的内部编码实现，redis会在合适的场景选择合适的内部编码，通过object encoding [key]可以查看内部编码。 这样设计的好处   改进内部编码，对外的数据结构和命令没有影响，外部用户无感知。 多种内部编码可在不同场">
 <meta property="og:locale" content="en">
-<meta property="og:updated_time" content="2018-10-16T10:36:21.061Z">
+<meta property="og:image" content="https://chyi0425.github.io/img/redis-1.jpg">
+<meta property="og:image" content="https://chyi0425.github.io/img/redis-2.png">
+<meta property="og:image" content="https://chyi0425.github.io/img/redis12.png">
+<meta property="og:updated_time" content="2019-01-28T07:15:53.375Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="redis数据结构以及内部编码">
+<meta name="twitter:description" content="redis有5种常用的数据结构：string、hash、list、set、zset,通过type [key]命令可以查看当前键的数据结构类型；每种数据结构都有不止一种相应的内部编码实现，redis会在合适的场景选择合适的内部编码，通过object encoding [key]可以查看内部编码。 这样设计的好处   改进内部编码，对外的数据结构和命令没有影响，外部用户无感知。 多种内部编码可在不同场">
+<meta name="twitter:image" content="https://chyi0425.github.io/img/redis-1.jpg">
   
     <link rel="alternative" href="/atom.xml" title="Alex&#39;s blog" type="application/atom+xml">
   
@@ -176,7 +183,34 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        
+        <p>redis有5种常用的数据结构：string、hash、list、set、zset,通过type [key]命令可以查看当前键的数据结构类型；每种数据结构都有不止一种相应的内部编码实现，redis会在合适的场景选择合适的内部编码，通过object encoding [key]可以查看内部编码。</p>
+<p>这样设计的好处</p>
+<blockquote>
+<ol>
+<li>改进内部编码，对外的数据结构和命令没有影响，外部用户无感知。</li>
+<li>多种内部编码可在不同场景下发挥各自优势。如:ziplist比较节约内存，但在元素比较多的情况下，性能会下降，此时转换为linkedlist。</li>
+</ol>
+</blockquote>
+<p><img src="/img/redis-1.jpg" alt="示意图"></p>
+<h3 id="数据结构"><a href="#数据结构" class="headerlink" title="数据结构"></a>数据结构</h3><h4 id="string类型"><a href="#string类型" class="headerlink" title="string类型"></a>string类型</h4><p>是redis最基础的数据结构，可以是最简单的字符串，复杂的字符串(JSON,XML)，数字，二进制(图片、视频、音频),但最大不能超过512M。</p>
+<h4 id="hash类型"><a href="#hash类型" class="headerlink" title="hash类型"></a>hash类型</h4><p>在数据量比较小时使用ziplist,更加紧凑的存储元素，节省内存；当不满足其使用条件时，会使用hashtable作为hash的内部实现，此时ziplist的读写效率会下降，而haashtable的读写时间复杂度为O(1)。</p>
+<h4 id="list类型"><a href="#list类型" class="headerlink" title="list类型"></a>list类型</h4><p>用来存储多个有序的可重复的字符串，一个列表最多可有2^32-1个元素；可以对列表两端插入和弹出，还可以取指定范围的元素列表、获取指定索引下标的元素。列表是一种比较灵活的数据结构，可以充当栈和队列的角色。</p>
+<h4 id="set类型"><a href="#set类型" class="headerlink" title="set类型"></a>set类型</h4><p>集合中不允许有重复元素，并且集合中的元素是无序的。一个set集合最多可有2^32-1个元素，支持多个集合的交集、并集、差集。</p>
+<h4 id="zset类型"><a href="#zset类型" class="headerlink" title="zset类型"></a>zset类型</h4><p>有序集合，不能有重复元素，但是元素可以排序，通过给每一个元素设置一个分数作为排序的依据。提供了获取指定分数和元素范围查询、计算成员排名等功能。</p>
+<h3 id="编码实现"><a href="#编码实现" class="headerlink" title="编码实现"></a>编码实现</h3><h4 id="skiplist"><a href="#skiplist" class="headerlink" title="skiplist"></a>skiplist</h4><p>跳表(skiplist)是一个特殊的链表，相比一般的链表，有更高的查找效率，其效率可比拟二叉查找树。</p>
+<p>一张关于跳表和跳表搜索的过程如下图：</p>
+<p><img src="/img/redis-2.png" alt="示意图"></p>
+<p>在图中，需要寻找68，在给出的查找过程中，利用跳表数据结构优势，只查找了3次，横箭头不比较，竖箭头比较。由此可见，跳表预先间隔地保存了有序链表中的节点，从而在查找过程中能达到类似于二分搜索的效果，而二分搜索思想就是通过比较中点数据放弃另一半的查找，从而节省一半的查找时间。缺点即浪费了空间，自古空间和时间两难全。</p>
+<h4 id="跳表的数据结构"><a href="#跳表的数据结构" class="headerlink" title="跳表的数据结构"></a>跳表的数据结构</h4><p><img src="/img/redis12.png" alt="示意图"></p>
+<p>从上图中总结跳跃表的性质：</p>
+<ol>
+<li>由很多层结构组成</li>
+<li>每一层都是一个有序链表</li>
+<li>最底层(Level 1)的链表包含所有元素</li>
+<li>如果一个元素出现在Level i的链表中，则在它的Level i之下的链表也会出现</li>
+<li>每个节点包含2个指针，一个指向同一链表中的下一个元素，一个指向下面一层的元素</li>
+</ol>
+
       
 
       
@@ -285,6 +319,15 @@
   
 <nav id="article-nav">
   
+    <a href="/2018/10/17/redis持久化/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          redis持久化
+        
+      </div>
+    </a>
+  
   
     <a href="/2018/10/16/Java-pass-by-value/" id="article-nav-older" class="article-nav-link-wrap">
       <div class="article-nav-title">Java-pass-by-value</div>
@@ -314,7 +357,7 @@
                 </span>
                 <span class="tooltip-content">
                     <div class="toc-article">
-                    目录，不存在的…
+                    <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#数据结构"><span class="toc-number">1.</span> <span class="toc-text">数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#string类型"><span class="toc-number">1.1.</span> <span class="toc-text">string类型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#hash类型"><span class="toc-number">1.2.</span> <span class="toc-text">hash类型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#list类型"><span class="toc-number">1.3.</span> <span class="toc-text">list类型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#set类型"><span class="toc-number">1.4.</span> <span class="toc-text">set类型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#zset类型"><span class="toc-number">1.5.</span> <span class="toc-text">zset类型</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#编码实现"><span class="toc-number">2.</span> <span class="toc-text">编码实现</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#skiplist"><span class="toc-number">2.1.</span> <span class="toc-text">skiplist</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#跳表的数据结构"><span class="toc-number">2.2.</span> <span class="toc-text">跳表的数据结构</span></a></li></ol></li></ol>
                     </div>
                 </span>
             </div>
@@ -343,7 +386,7 @@
   <div class="outer">
     <div id="footer-info">
     	<div class="footer-left">
-    		&copy; 2018 Alex
+    		&copy; 2019 Alex
     	</div>
       	<div class="footer-right">
       		<a href="http://hexo.io/" target="_blank">Hexo</a>  Theme <a href="https://github.com/litten/hexo-theme-yilia" target="_blank">Yilia</a> by Litten
@@ -426,6 +469,14 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
           <ul class="article-tag-list" q-show="showTags">
              
               <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">Transaction</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">algorithm</a>
+              </li>
+             
+              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color5">Java</a>
               </li>
              
@@ -434,15 +485,7 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">algorithm</a>
-              </li>
-             
-              <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">JVM</a>
-              </li>
-             
-              <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color5">Interview</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -454,7 +497,27 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
+                <a href="javascript:void(0)" class="js-tag color2">ClassLoader</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Dubbo</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">JDK</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color5">Interview</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Redis</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">Memcache</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -462,11 +525,19 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+                <a href="javascript:void(0)" class="js-tag color1">dubbo</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Collection</a>
+                <a href="javascript:void(0)" class="js-tag color4">sql</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">B+Tree</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Design Patterns</a>
               </li>
              
               <li class="article-tag-list-item">
@@ -478,15 +549,39 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">Redis</a>
+                <a href="javascript:void(0)" class="js-tag color1">Mysql</a>
               </li>
              
               <li class="article-tag-list-item">
-                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
+                <a href="javascript:void(0)" class="js-tag color4">udp</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color4">tcp</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color3">network</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">collection</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color2">python</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">Collection</a>
               </li>
              
               <li class="article-tag-list-item">
                 <a href="javascript:void(0)" class="js-tag color4">bit</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">douyu</a>
               </li>
              
               <li class="article-tag-list-item">
