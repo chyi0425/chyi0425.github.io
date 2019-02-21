@@ -35,6 +35,42 @@ BeanFactory，从名字上也很好理解，生产 bean 的工厂，它负责生
 
 5. 请先不用花时间在其他的接口和类上，先理解我说的这几点就可以了。
 
+### BPP && Bean生命周期
+
+BPP的全称叫做：BeanPostProcessor，一般我们俗称对象后处理器
+
+* 简单来说，通过BeanPostProcessor可以对我们的对象进行“加工处理”。
+
+Bean的生命周期
+
+1. ResourceLoader加载配置信息
+2. BeanDefinitionReader解析配置信息，生成一个个BeanDefinition
+3. BeanDefinition由BeanDefinitionRegistry管理起来
+4. BeanFactoryPostProcessor对配置信息进行加工(也就是处理配置信息，一般通过PropertyPlaceholderConfigurer来实现)
+5. 实例化Bean
+6. 如果该Bean配置/实现了InstantiationAwareBean,则调用对应的方法
+7. 使用BeanWrapper来完成对象之间的属性配置(依赖)
+8. 如果该Bean配置/实现了Aware接口，则调用对应的方法
+9. 如果该Bean配置了BeanPostProcessor的before()方法，则调用
+10. 如果该Bean配置了init-method或者实现InstantiationBean，则调用对应的方法
+11. 如果该Bean配置了BeanPostProcessor的after方法，则调用
+12. 将对象放入到HashMap中
+13. 最后如果配置了destroy-method或者Disposable的方法，则执行销毁操作
+
+![示意图](/img/v2-8ba0d9e2e79a05088cc11031b75f0963_r.jpg)
+
+#### BPP
+
+![示意图](/img/v2-7474b16c7104043047ed35014ac957a8_r.jpg)
+
+#### 为什么特意讲BPP
+
+Spring AOP编程底层通过的是动态代理技术，在调用的时候肯定用的是代理对象。那么Spring是怎么做的呢？
+
+> 我只需要写一个BPP，在postProcessBeforeInitialization或者postProcessAfterInitialization方法中，对对象进行判断，看他需不需要织入切面逻辑，如果需要，那我就根据这个对象，生成一个代理对象，然后返回这个代理对象，那么最终注入容器的，自然就是代理对象了。
+
+Spring提供了BeanPostProcessor，就是让我们可以对有需要的对象进行“加工处理”！
+
 ### 启动过程分析
 
 第一步，我们肯定要从 ClassPathXmlApplicationContext 的构造方法说起。
