@@ -177,3 +177,15 @@ public static void main(String[] args) {
 
 Channel通道**只负责传输数据、不直接操作数据的**。操作数据都是通过Buffer缓冲区来进行操作！
 
+```Java
+
+        // 1. 通过本地IO的方式来获取通道
+        FileInputStream fileInputStream = new FileInputStream("F:\\3yBlog\\JavaEE常用框架\\Elasticsearch就是这么简单.md");
+
+        // 得到文件的输入通道
+        FileChannel inchannel = fileInputStream.getChannel();
+
+        // 2. jdk1.7后通过静态方法.open()获取通道
+        FileChannel.open(Paths.get("F:\\3yBlog\\JavaEE常用框架\\Elasticsearch就是这么简单2.md"), StandardOpenOption.WRITE);
+
+```
