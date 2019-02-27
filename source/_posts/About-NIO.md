@@ -297,3 +297,310 @@ recvfrom从应用层到内核的时候，如果没有数据就直接返回一个
 在Linux下它是这样子实现I/O复用模型的：
 
 - 调用select/poll/epoll/pselect其中一个函数，传入多个文件描述符，如果有一个文件描述符就绪，则返回，否则阻塞直到超时。
+
+比如poll()函数是这样子的：int poll(struct pollfd \*fds,nfds_t nfds, int timeout);
+
+其中 pollfd 结构定义如下：
+
+```c
+
+struct pollfd {
+    int fd;         /* 文件描述符 */
+    short events;         /* 等待的事件 */
+    short revents;       /* 实际发生了的事件 */
+};
+```
+![示意图](/img/about-nio-26.gif)
+
+![示意图](/img/about-nio-27.png)
+
+- （1）当用户进程调用了select，那么整个进程会被block；
+- （2）而同时，kernel会“监视”所有select负责的socket；
+- （3）当任何一个socket中的数据准备好了，select就会返回；
+- （4）这个时候用户进程再调用read操作，将数据从kernel拷贝到用户进程(空间)。
+- 所以，I/O 多路复用的特点是通过一种机制一个进程能同时等待多个文件描述符，而这些文件描述符其中的任意一个进入读就绪状态，select()函数就可以返回。
+
+select/epoll的优势并不是对于单个连接能处理得更快，而是在于能**处理更多的连接**。
+
+#### I/O模型总结
+
+##### 阻塞I/O：
+
+- Java3y跟女朋友去买喜茶，排了很久的队终于可以点饮料了。我要绿研，谢谢。可是喜茶不是点了单就能立即拿，于是我在喜茶门口等了一小时才拿到绿研。
+    - 在门口干等一小时
+
+##### 非阻塞I/O：
+
+- Java3y跟女朋友去买一点点，排了很久的队终于可以点饮料了。我要波霸奶茶，谢谢。可是一点点不是点了单就能立即拿，同时服务员告诉我：你大概要等半小时哦。你们先去逛逛吧.于是Java3y跟女朋友去玩了几把斗地主，感觉时间差不多了。于是又去一点点问：请问到我了吗？我的单号是xxx。服务员告诉Java3y：还没到呢，现在的单号是XXX，你还要等一会，可以去附近耍耍。问了好几次后，终于拿到我的波霸奶茶了。
+    - 去逛了下街、斗了下地主，时不时问问到我了没有
+
+##### I/O复用模型：
+
+- Java3y跟女朋友去麦当劳吃汉堡包，现在就厉害了可以使用微信小程序点餐了。于是跟女朋友找了个地方坐下就用小程序点餐了。点餐了之后玩玩斗地主、聊聊天什么的。时不时听到广播在复述XXX请取餐，反正我的单号还没到，就继续玩呗。等听到广播的时候再取餐就是了。时间过得挺快的，此时传来：Java3y请过来取餐。于是我就能拿到我的麦辣鸡翅汉堡了。
+    - 听广播取餐，广播不是为我一个人服务。广播喊到我了，我过去取就Ok了。
+
+### 使用NIO完成网络通信
+
+![示意图](/img/about-nio-28.png)
+
+NIO被叫为 no-blocking io，其实是在**网络这个层次中理解的**，对于**FileChannel来说一样是阻塞**。
+
+我们前面也仅仅讲解了FileChannel，对于我们网络通信是还有几个Channel的~
+
+![示意图](/img/about-nio-29.png)
+
+所以说：我们通常使用NIO是在网络中使用的，网上大部分讨论NIO都是在网络通信的基础之上的！说NIO是非阻塞的NIO也是网络中体现的！
+
+从上面的图我们可以发现还有一个Selector选择器这么一个东东。从一开始我们就说过了，nio的核心要素有：
+
+- Buffer缓冲区
+- Channel通道
+- Selector选择器
+
+我们在网络中使用NIO往往是I/O模型的多路复用模型！
+
+- Selector选择器就可以比喻成麦当劳的广播。
+- 一个线程能够管理多个Channel的状态
+
+![示意图](/img/about-nio-30.png)
+
+### NIO阻塞形态
+
+为了更好地理解，我们先来写一下NIO在网络中是阻塞的状态代码，随后看看非阻塞是怎么写的就更容易理解了。
+
+- 是阻塞的就没有Selector选择器了，就直接使用Channel和Buffer就完事了。
+
+客户端：
+
+```java
+
+public class BlockClient {
+
+    public static void main(String[] args) throws IOException {
+
+        // 1. 获取通道
+        SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress("127.0.0.1", 6666));
+
+        // 2. 发送一张图片给服务端吧
+        FileChannel fileChannel = FileChannel.open(Paths.get("X:\\Users\\ozc\\Desktop\\新建文件夹\\1.png"), StandardOpenOption.READ);
+
+        // 3.要使用NIO，有了Channel，就必然要有Buffer，Buffer是与数据打交道的呢
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        // 4.读取本地文件(图片)，发送到服务器
+        while (fileChannel.read(buffer) != -1) {
+
+            // 在读之前都要切换成读模式
+            buffer.flip();
+
+            socketChannel.write(buffer);
+
+            // 读完切换成写模式，能让管道继续读取文件的数据
+            buffer.clear();
+        }
+
+        // 5. 关闭流
+        fileChannel.close();
+        socketChannel.close();
+    }
+}
+
+```
+
+服务端
+```Java
+
+public class BlockServer {
+
+    public static void main(String[] args) throws IOException {
+
+        // 1.获取通道
+        ServerSocketChannel server = ServerSocketChannel.open();
+
+        // 2.得到文件通道，将客户端传递过来的图片写到本地项目下(写模式、没有则创建)
+        FileChannel outChannel = FileChannel.open(Paths.get("2.png"), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+
+        // 3. 绑定链接
+        server.bind(new InetSocketAddress(6666));
+
+        // 4. 获取客户端的连接(阻塞的)
+        SocketChannel client = server.accept();
+
+        // 5. 要使用NIO，有了Channel，就必然要有Buffer，Buffer是与数据打交道的呢
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        // 6.将客户端传递过来的图片保存在本地中
+        while (client.read(buffer) != -1) {
+
+            // 在读之前都要切换成读模式
+            buffer.flip();
+
+            outChannel.write(buffer);
+
+            // 读完切换成写模式，能让管道继续读取文件的数据
+            buffer.clear();
+
+        }
+
+        // 7.关闭通道
+        outChannel.close();
+        client.close();
+        server.close();
+    }
+}
+
+```
+
+结果就可以将客户端传递过来的图片保存在本地了：
+
+![示意图](/img/about-nio-31.png)
+
+此时服务端保存完图片想要告诉客户端已经收到图片啦：
+
+![示意图](/img/about-nio-32.png)
+
+客户端接收服务端带过来的数据：
+
+![示意图](/img/about-nio-33.png)
+
+如果仅仅是上面的代码是不行的！这个程序会阻塞起来！
+- 因为服务端不知道客户端还有没有数据要发过来(与刚开始不一样，客户端发完数据就将流关闭了，服务端可以知道客户端没数据发过来了)，导致服务端一直在读取客户端发过来的数据。
+- 进而导致了阻塞！
+
+于是客户端在写完数据给服务端时，**显式告诉服务端已经发完数据了！**
+
+![示意图](/img/about-nio-34.png)
+
+### NIO非阻塞形态
+
+如果使用非阻塞模式的话，那么我们就可以不显式告诉服务器已经发完数据了。我们下面来看看怎么写：
+
+```Java
+public class NoBlockClient {
+
+    public static void main(String[] args) throws IOException {
+
+        // 1. 获取通道
+        SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress("127.0.0.1", 6666));
+
+        // 1.1切换成非阻塞模式
+        socketChannel.configureBlocking(false);
+
+        // 2. 发送一张图片给服务端吧
+        FileChannel fileChannel = FileChannel.open(Paths.get("X:\\Users\\ozc\\Desktop\\新建文件夹\\1.png"), StandardOpenOption.READ);
+
+        // 3.要使用NIO，有了Channel，就必然要有Buffer，Buffer是与数据打交道的呢
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        // 4.读取本地文件(图片)，发送到服务器
+        while (fileChannel.read(buffer) != -1) {
+
+            // 在读之前都要切换成读模式
+            buffer.flip();
+
+            socketChannel.write(buffer);
+
+            // 读完切换成写模式，能让管道继续读取文件的数据
+            buffer.clear();
+        }
+
+        // 5. 关闭流
+        fileChannel.close();
+        socketChannel.close();
+    }
+}
+
+
+
+public class NoBlockServer {
+
+    public static void main(String[] args) throws IOException {
+
+        // 1.获取通道
+        ServerSocketChannel server = ServerSocketChannel.open();
+
+        // 2.切换成非阻塞模式
+        server.configureBlocking(false);
+
+        // 3. 绑定连接
+        server.bind(new InetSocketAddress(6666));
+
+        // 4. 获取选择器
+        Selector selector = Selector.open();
+
+        // 4.1将通道注册到选择器上，指定接收“监听通道”事件
+        server.register(selector, SelectionKey.OP_ACCEPT);
+
+        // 5. 轮训地获取选择器上已“就绪”的事件--->只要select()>0，说明已就绪
+        while (selector.select() > 0) {
+            // 6. 获取当前选择器所有注册的“选择键”(已就绪的监听事件)
+            Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+
+            // 7. 获取已“就绪”的事件，(不同的事件做不同的事)
+            while (iterator.hasNext()) {
+
+                SelectionKey selectionKey = iterator.next();
+
+                // 接收事件就绪
+                if (selectionKey.isAcceptable()) {
+
+                    // 8. 获取客户端的链接
+                    SocketChannel client = server.accept();
+
+                    // 8.1 切换成非阻塞状态
+                    client.configureBlocking(false);
+
+                    // 8.2 注册到选择器上-->拿到客户端的连接为了读取通道的数据(监听读就绪事件)
+                    client.register(selector, SelectionKey.OP_READ);
+
+                } else if (selectionKey.isReadable()) { // 读事件就绪
+
+                    // 9. 获取当前选择器读就绪状态的通道
+                    SocketChannel client = (SocketChannel) selectionKey.channel();
+
+                    // 9.1读取数据
+                    ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+                    // 9.2得到文件通道，将客户端传递过来的图片写到本地项目下(写模式、没有则创建)
+                    FileChannel outChannel = FileChannel.open(Paths.get("2.png"), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+
+                    while (client.read(buffer) > 0) {
+                        // 在读之前都要切换成读模式
+                        buffer.flip();
+
+                        outChannel.write(buffer);
+
+                        // 读完切换成写模式，能让管道继续读取文件的数据
+                        buffer.clear();
+                    }
+                }
+                // 10. 取消选择键(已经处理过的事件，就应该取消掉了)
+                iterator.remove();
+            }
+        }
+
+    }
+}
+
+```
+
+下面就简单总结一下使用NIO时的要点：
+
+- 将Socket通道注册到Selector中，监听感兴趣的事件
+- 当感兴趣的时间就绪时，则会进去我们处理的方法进行处理
+- 每处理完一次就绪事件，删除该选择键(因为我们已经处理完了)
+
+
+### 管道和DataGramChannel
+
+#### UDP
+
+![示意图](/img/about-nio-35.png)
+
+![示意图](/img/about-nio-36.png)
+
+### 管道
+
+![示意图](/img/about-nio-37.png)
+
+![示意图](/img/about-nio-38.png)
