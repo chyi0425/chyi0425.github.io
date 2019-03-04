@@ -159,3 +159,14 @@ public abstract class Enum<E extends java.lang.Enum<E>>
 * Enum类有一个静态的valueOf()方法，可以根据枚举类型以及name返回对应的枚举常量。
 * Enum类不允许反序列化，为了保证枚举永远是单例的。
 
+
+
+```flow
+st=>start: 开始
+op=>operation: My Operation
+cond=>condition: Yes or No?
+e=>end
+st->op->cond
+cond(yes)->e
+cond(no)->op
+&```
