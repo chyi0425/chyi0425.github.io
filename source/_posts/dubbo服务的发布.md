@@ -549,3 +549,82 @@ public interface HelloService {
 
 具体针对上述案例，则是 根据dubbo:reference配置创建了一个ReferenceBean，该bean又实现了Spring的org.springframework.beans.factory.FactoryBean接口，所以我们如下方式使用时：
 
+具体针对上述案例，则是 根据dubbo:reference配置创建了一个ReferenceBean，该bean又实现了Spring的org.springframework.beans.factory.FactoryBean接口，所以我们如下方式使用时：
+
+```Java
+@Autowired
+private HelloService helloService;
+```
+
+使用的不是ReferenceBean对象，而是ReferenceBean的getObject()方法返回的对象。该对象通过代理实现了HelloService接口。所以要看服务引用的整个过程就需要从ReferenceBean的getObject()方法开始入手。
+
+## 服务引用过程
+
+第一步：收集配置的参数，参数如下：
+
+```
+methods=hello,
+timestamp=1443695417847,
+dubbo=2.5.3
+application=consumer-of-helloService
+side=consumer
+pid=7748
+interface=com.demo.dubbo.service.HelloService
+```
+
+第二步：从注册中心引用服务，创建出 Invoker对象
+
+如果是单个注册中心，代码如下：
+
+```Java
+Protocol refprotocol = ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
+
+invoker = refprotocol.refer(interfaceClass, url);
+```
+
+上述url内容如下：
+
+```properties
+registry://127.0.0.1:2181/com.alibaba.dubbo.registry.RegistryService?
+application=consumer-of-helloService&
+dubbo=2.5.3&
+pid=8292&
+registry=zookeeper&
+timestamp=1443707173909&
+refer=
+    application=consumer-of-helloService&
+    dubbo=2.5.3&
+    interface=com.demo.dubbo.service.HelloService&
+    methods=hello&
+    pid=8292&
+    side=consumer&
+    timestamp=1443707173884&
+
+```
+
+前面的信息是注册中心的配置信息，如使用zookeeper来作为注册中心
+
+后面refer的内容是要引用的服务信息，如引用HelloService服务
+
+使用协议Protocol根据上述的url和服务接口来引用服务，创建出一个Invoker对象
+
+第三步：使用ProxyFactory创建出一个接口的代理对象，该代理对象的方法的执行都交给上述Invoker来执行，代码如下
+```Java
+ProxyFactory proxyFactory = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
+
+proxyFactory.getProxy(invoker);
+```
+
+下面就来详细的说明下上述第二步和第三步的过程中涉及到的几个概念
+
+## 概念介绍
+
+### Invoker概念
+
+Invoker介绍参考上文
+
+对于客户端来说，Invoker则应该是远程通信执行类的Invoker、多个远程通信类型的Invoker聚合成的集群版的Invoker这两种类型。先来说说非集群版的Invoker，即远程通信类型的Invoker。来看下DubboInvoker的具体实现
+
+```Java
+```
+
