@@ -5,6 +5,61 @@ tags: [JAVA,Concurrency]
 toc: true
 ---
 
+## dubbo扩展机制
+
+### 简单功能介绍
+
+dubbo的扩展机制和Java的SPI机制非常类似，但是增加了如下功能：
+1. 可以方便的获取某一个想要的扩展实现，Java的SPI机制就没有提供这样的功能
+2. 对于扩展实现IOC依赖注入功能：举例来说 接口A，实现者A1、A2。接口B，实现者B1、B2。现在实现者A1含有setB()方法，会自动注入一个接口B的实现者，此时注入B1还是B2呢？都不是，而是注入一个动态生成的接口B的实现者B$Adpative，该实现者能够根据参数的不同，自动引用B1或者B2来完成相应的功能
+3. 对于扩展采用装饰器模式进行功能增强，类似AOP实现的功能：还是以上面的例子，接口A的另一个实现者AWrapper1。大体内容如下：
+```Java
+private A a;
+AWrapper1（A a）{
+    this.a=a;
+}
+```
+因此，我们在获取某一个接口A的实现者A1的时候，已经自动被AWrapper1包装了。
+
+### dubbo的ExtensionLoader解析扩展过程
+
+以下面的例子为例来分析下：
+```Java
+ExtensionLoader<Protocol> protocolLoader=ExtensionLoader.getExtensionLoader(Protocol.class);
+Protocol  protocol=protocolLoader.getAdaptiveExtension();
+```
+
+其中Protocol接口定义如下：
+
+```Java
+@Extension("dubbo")
+public interface Protocol {
+
+    int getDefaultPort();
+
+    @Adaptive
+    <T> Exporter<T> export(Invoker<T> invoker) throws RpcException;
+
+    @Adaptive
+    <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException;
+
+    void destroy();
+
+}
+```
+对应的实现者如下：
+
+![示意图](/img/20184239_ECZ3.png)
+
+第一步：根据要加载的接口创建出一个ExtensionLoader实例
+
+ExtensionLoader中含有一个静态属性：
+
+```Java
+ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<Class<?>, ExtensionLoader<?>>();
+```
+
+
 ## dubbo与spring接入
 
 dubbo的官方文档也说明了，dubbo可以不依赖任何Spring。这一块日后再详细说明，目前先介绍dubbo与Spring的集成。与spring的集成是基于Spring的Schema扩展进行加载
