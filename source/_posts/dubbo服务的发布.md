@@ -67,7 +67,21 @@ ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHa
 
 ![示意图](/img/20192445_xtft.png)
 
+该文件的内容如下
 
+```Java
+com.alibaba.dubbo.registry.support.RegistryProtocol
+com.alibaba.dubbo.rpc.protocol.ProtocolFilterWrapper
+com.alibaba.dubbo.rpc.protocol.ProtocolListenerWrapper
+com.alibaba.dubbo.rpc.protocol.dubbo.DubboProtocol
+com.alibaba.dubbo.rpc.protocol.injvm.InjvmProtocol
+com.alibaba.dubbo.rpc.protocol.rmi.RmiProtocol
+com.alibaba.dubbo.rpc.protocol.hessian.HessianProtocol
+```
+
+然后就是读取每一行内容，加载对应的class。
+
+- 3 对于上述class分成三种情况来处理，对于一个接口的实现者，ExtensionLoader分三种情况来分别
 
 ## dubbo与spring接入
 
