@@ -58,6 +58,15 @@ ExtensionLoader中含有一个静态属性：
 ```Java
 ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<Class<?>, ExtensionLoader<?>>();
 ```
+用于缓存所有的扩展加载实例，这里加载Protocol.class，就以Protocol.class为key，创建的ExtensionLoader为value存储到上述EXTENSION_loaders中
+
+我们先来看下，ExtensionLoader实例是如何来加载Protocol的实现类的：
+
+- 1 先解析Protocol上的Extension注解的name,存至String cachedDefaultName属性中，作为默认的实现
+- 2 到类路径下的加载META-INF/services/com.alibaba.dubbo.rpc.Protocol文件
+
+![示意图](/img/20192445_xtft.png)
+
 
 
 ## dubbo与spring接入
