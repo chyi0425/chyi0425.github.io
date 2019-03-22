@@ -5,84 +5,6 @@ tags: [JAVA,Concurrency]
 toc: true
 ---
 
-## dubbo扩展机制
-
-### 简单功能介绍
-
-dubbo的扩展机制和Java的SPI机制非常类似，但是增加了如下功能：
-1. 可以方便的获取某一个想要的扩展实现，Java的SPI机制就没有提供这样的功能
-2. 对于扩展实现IOC依赖注入功能：举例来说 接口A，实现者A1、A2。接口B，实现者B1、B2。现在实现者A1含有setB()方法，会自动注入一个接口B的实现者，此时注入B1还是B2呢？都不是，而是注入一个动态生成的接口B的实现者B$Adpative，该实现者能够根据参数的不同，自动引用B1或者B2来完成相应的功能
-3. 对于扩展采用装饰器模式进行功能增强，类似AOP实现的功能：还是以上面的例子，接口A的另一个实现者AWrapper1。大体内容如下：
-```Java
-private A a;
-AWrapper1（A a）{
-    this.a=a;
-}
-```
-因此，我们在获取某一个接口A的实现者A1的时候，已经自动被AWrapper1包装了。
-
-### dubbo的ExtensionLoader解析扩展过程
-
-以下面的例子为例来分析下：
-```Java
-ExtensionLoader<Protocol> protocolLoader=ExtensionLoader.getExtensionLoader(Protocol.class);
-Protocol  protocol=protocolLoader.getAdaptiveExtension();
-```
-
-其中Protocol接口定义如下：
-
-```Java
-@Extension("dubbo")
-public interface Protocol {
-
-    int getDefaultPort();
-
-    @Adaptive
-    <T> Exporter<T> export(Invoker<T> invoker) throws RpcException;
-
-    @Adaptive
-    <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException;
-
-    void destroy();
-
-}
-```
-对应的实现者如下：
-
-![示意图](/img/20184239_ECZ3.png)
-
-第一步：根据要加载的接口创建出一个ExtensionLoader实例
-
-ExtensionLoader中含有一个静态属性：
-
-```Java
-ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<Class<?>, ExtensionLoader<?>>();
-```
-用于缓存所有的扩展加载实例，这里加载Protocol.class，就以Protocol.class为key，创建的ExtensionLoader为value存储到上述EXTENSION_loaders中
-
-我们先来看下，ExtensionLoader实例是如何来加载Protocol的实现类的：
-
-- 1 先解析Protocol上的Extension注解的name,存至String cachedDefaultName属性中，作为默认的实现
-- 2 到类路径下的加载META-INF/services/com.alibaba.dubbo.rpc.Protocol文件
-
-![示意图](/img/20192445_xtft.png)
-
-该文件的内容如下
-
-```Java
-com.alibaba.dubbo.registry.support.RegistryProtocol
-com.alibaba.dubbo.rpc.protocol.ProtocolFilterWrapper
-com.alibaba.dubbo.rpc.protocol.ProtocolListenerWrapper
-com.alibaba.dubbo.rpc.protocol.dubbo.DubboProtocol
-com.alibaba.dubbo.rpc.protocol.injvm.InjvmProtocol
-com.alibaba.dubbo.rpc.protocol.rmi.RmiProtocol
-com.alibaba.dubbo.rpc.protocol.hessian.HessianProtocol
-```
-
-然后就是读取每一行内容，加载对应的class。
-
-- 3 对于上述class分成三种情况来处理，对于一个接口的实现者，ExtensionLoader分三种情况来分别
-
 ## dubbo与spring接入
 
 dubbo的官方文档也说明了，dubbo可以不依赖任何Spring。这一块日后再详细说明，目前先介绍dubbo与Spring的集成。与spring的集成是基于Spring的Schema扩展进行加载
@@ -704,5 +626,381 @@ Invoker介绍参考上文
 对于客户端来说，Invoker则应该是远程通信执行类的Invoker、多个远程通信类型的Invoker聚合成的集群版的Invoker这两种类型。先来说说非集群版的Invoker，即远程通信类型的Invoker。来看下DubboInvoker的具体实现
 
 ```Java
+    @Override
+    protected Result doInvoke(final Invocation invocation) throws Throwable {
+        RpcInvocation inv = (RpcInvocation) invocation;
+        final String methodName = RpcUtils.getMethodName(invocation);
+        inv.setAttachment(Constants.PATH_KEY, getUrl().getPath());
+        inv.setAttachment(Constants.VERSION_KEY, version);
+
+        ExchangeClient currentClient;
+        if (clients.length == 1) {
+            currentClient = clients[0];
+        } else {
+            currentClient = clients[index.getAndIncrement() % clients.length];
+        }
+        try {
+            boolean isAsync = RpcUtils.isAsync(getUrl(), invocation);
+            boolean isOneway = RpcUtils.isOneway(getUrl(), invocation);
+            int timeout = getUrl().getMethodParameter(methodName, Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT);
+            // 不需要返回值
+            if (isOneway) {
+                boolean isSent = getUrl().getMethodParameter(methodName, Constants.SENT_KEY, false);
+                currentClient.send(inv, isSent);
+                RpcContext.getContext().setFuture(null);
+                return new RpcResult();
+            } else if (isAsync) {
+                // 异步
+                ResponseFuture future = currentClient.request(inv, timeout);
+                RpcContext.getContext().setFuture(new FutureAdapter<Object>(future));
+                return new RpcResult();
+            } else {
+                // 同步
+                RpcContext.getContext().setFuture(null);
+                return (Result) currentClient.request(inv, timeout).get();
+            }
+        } catch (TimeoutException e) {
+            throw new RpcException(RpcException.TIMEOUT_EXCEPTION, "Invoke remote method timeout. method: " + invocation.getMethodName() + ", provider: " + getUrl() + ", cause: " + e.getMessage(), e);
+        } catch (RemotingException e) {
+            throw new RpcException(RpcException.NETWORK_EXCEPTION, "Failed to invoke remote method: " + invocation.getMethodName() + ", provider: " + getUrl() + ", cause: " + e.getMessage(), e);
+        }
+    }
 ```
+
+大概内容就是：
+
+将通过远程通信将Invocation信息传递给服务器端，服务器端接收到该Invocation信息后，找到对应的本地Invoker，然后通过反射执行相应的方法，将方法的返回值再通过远程通信将结果传递给客户端。
+
+这里分成3种情况：
+
+- 执行的方法不需要返回值：直接使用ExchangeClient的send方法
+- 执行的方法的结果需要异步返回：使用ExchangeClient的request方法，返回一个ResponseFuture,通过ThreadLocal方式与当前线程绑定，未等服务端相应结果就直接返回
+- 执行的方法的结果需要同步返回：使用ExchangeClient的request方法，返回一个ResponseFuture,一直阻塞到服务端返回响应结果。
+
+#### Protocol概念
+
+从上面得知服务引用的第二个过程就是：
+
+```Java
+invoker = refprotocol.refer(interfaceClass, url);
+```
+
+使用协议Protocol根据上述的url和服务接口来引用服务，创建出一个Invoker对象
+
+针对server端来说，会如下使用Protocol
+
+```Java
+Exporter<?> exporter = protocol.export(invoker);
+```
+Protocol要解决的问题就是：根据url中指定的协议(默认dubbo)对外公布这个HelloService服务，当客户端根据协议调用这个服务时，将客户端传递过来的Invocation参数交给服务端的Invoker来执行。所以Protocol加入了远程通信协议的这一块，根据客户端的请求来获取Invocation invocation。
+
+而针对客户端，则需要根据服务器开放的协议(服务端在注册中心注册的url地址中含有该信息)来创建协议的Invoker对象，如
+- DubboInvoker
+- InJvmInvoker
+- ThriftInvoker
+等等
+
+如服务器端在注册中心注册的url地址为：
+```properties
+dubbo://192.168.1.104:20880/com.demo.dubbo.service.HelloService?
+anyhost=true&
+application=helloService-app&dubbo=2.5.3&
+interface=com.demo.dubbo.service.HelloService&
+methods=hello&
+pid=3904&
+side=provider&
+timestamp=1444003718316
+```
+
+会看到上述服务是以dubbo协议注册的，所以这里产生的Invoker就是DubboInvoker。我们来具体的看下这个过程
+
+先来看下Protocol接口的定义
+```Java
+@SPI("dubbo")
+public interface Protocol {
+    
+    int getDefaultPort();
+
+    //针对server端来说，将本地执行类的Invoker通过协议暴漏给外部。这样外部就可以通过协议发送执行参数Invocation，然后交给本地Invoker来执行
+    @Adaptive
+    <T> Exporter<T> export(Invoker<T> invoker) throws RpcException;
+
+    //这个是针对客户端的，客户端从注册中心获取服务器端发布的服务信息
+    //通过服务信息得知服务器端使用的协议，然后客户端仍然使用该协议构造一个Invoker。这个Invoker是远程通信类的Invoker。
+    //执行时，需要将执行信息通过指定协议发送给服务器端，服务器端接收到参数Invocation，然后交给服务器端的本地Invoker来执行
+    @Adaptive
+    <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException;
+
+    void destroy();
+
+}
+
+```
+
+我们再来详细看看服务引用的第二步：
+
+```Java
+invoker = refprotocol.refer(interfaceClass, url);
+```
+protocol的来历是：
+
+```Java
+Protocol protocol = ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
+```
+
+Protocol的实现代码
+```Java
+public com.alibaba.dubbo.rpc.Exporter export(com.alibaba.dubbo.rpc.Invoker arg0) throws com.alibaba.dubbo.rpc.RpcException{
+    if (arg0 == null)  { 
+        throw new IllegalArgumentException("com.alibaba.dubbo.rpc.Invoker argument == null"); 
+    }
+    if (arg0.getUrl() == null) { 
+        throw new IllegalArgumentException("com.alibaba.dubbo.rpc.Invoker argument getUrl() == null"); 
+    }
+    com.alibaba.dubbo.common.URL url = arg0.getUrl();
+    String extName = ( url.getProtocol() == null ? "dubbo" : url.getProtocol() );
+    if(extName == null) {
+        throw new IllegalStateException("Fail to get extension(com.alibaba.dubbo.rpc.Protocol) name from url(" + url.toString() + ") use keys([protocol])"); 
+    }
+    com.alibaba.dubbo.rpc.Protocol extension = (com.alibaba.dubbo.rpc.Protocol)com.alibaba.dubbo.common.ExtensionLoader.getExtensionLoader(com.alibaba.dubbo.rpc.Protocol.class).getExtension(extName);
+    return extension.export(arg0);
+}
+
+public com.alibaba.dubbo.rpc.Invoker refer(java.lang.Class arg0,com.alibaba.dubbo.common.URL arg1) throws com.alibaba.dubbo.rpc.RpcException{
+    if (arg1 == null)  { 
+        throw new IllegalArgumentException("url == null"); 
+    }
+    com.alibaba.dubbo.common.URL url = arg1;
+    String extName = ( url.getProtocol() == null ? "dubbo" : url.getProtocol() );
+    if(extName == null) {
+        throw new IllegalStateException("Fail to get extension(com.alibaba.dubbo.rpc.Protocol) name from url(" + url.toString() + ") use keys([protocol])"); 
+    }
+    com.alibaba.dubbo.rpc.Protocol extension = (com.alibaba.dubbo.rpc.Protocol)com.alibaba.dubbo.common.ExtensionLoader.getExtensionLoader(com.alibaba.dubbo.rpc.Protocol.class).getExtension(extName);
+    return extension.refer(arg0, arg1);
+}
+
+```
+
+refer(interfaceClass,url)的过程即根据url的配置信息来最终选择Protocol实现，默认实现是"dubbo"的扩展实现即DubboProtocol，然后再对DubboProtocol进行依赖注入，进行wrap包装。先来看看Protocol的实现情况：
+
+![示意图](/img/05083015_UsSq.png)
+
+可以看到在返回DubboProtocol之前，经过了ProtocolFilterWrapper、ProtocolListenerWrapper、RegistryProtocol的包装。
+
+所谓的包装就是如下类似的内容：
+
+```Java
+package com.alibaba.xxx;
+
+import com.alibaba.dubbo.rpc.Protocol;
+ 
+public class XxxProtocolWrapper implemenets Protocol {
+    Protocol impl;
+ 
+    public XxxProtocol(Protocol protocol) { impl = protocol; }
+ 
+    // 接口方法做一个操作后，再调用extension的方法
+    public Exporter<T> export(final Invoker<T> invoker) {
+        //... 一些操作
+        impl .export(invoker);
+        // ... 一些操作
+    }
+ 
+    // ...
+}
+```
+
+使用装饰器模式，类似AOP的功能。
+
+所以上述服务引用的过程
+
+```Java
+invoker = refprotocol.refer(interfaceClass, urls.get(0));
+```
+
+中的refprotocol会先经过RegistryProtocol(先暂时忽略ProtocolFilterWrapper、ProtocolListenerWrapper)，它干了哪些事呢？
+
+- 根据注册中心的registryUrl获取注册服务Registry,将自身的consumer信息注册到注册中心上
+
+```Java
+//先根据客户端的注册中心配置找到对应注册服务
+Registry registry = registryFactory.getRegistry(url);
+
+//使用注册服务将客户端的信息注册到注册中心上
+registry.register(subscribeUrl.addParameters(Constants.CATEGORY_KEY, Constants.CONSUMERS_CATEGORY,
+            Constants.CHECK_KEY, String.valueOf(false)));
+```
+
+上述subscribeUrl地址如下：
+
+```
+consumer://192.168.1.104/com.demo.dubbo.service.HelloService?
+    application=consumer-of-helloService&
+    dubbo=2.5.3&
+    interface=com.demo.dubbo.service.HelloService&
+    methods=hello&
+    pid=6444&
+    side=consumer&
+    timestamp=1444606047076
+```
+- 创建一个RegistryDirectory，从注册中心订阅自己引用的服务，将订阅到url在RegistryDirectory内部转换成Invoker
+
+```Java
+RegistryDirectory<T> directory = new RegistryDirectory<T>(type, url);
+directory.setRegistry(registry);
+directory.setProtocol(protocol);
+directory.subscribe(subscribeUrl.addParameter(Constants.CATEGORY_KEY, 
+        Constants.PROVIDERS_CATEGORY 
+        + "," + Constants.CONFIGURATORS_CATEGORY 
+        + "," + Constants.ROUTERS_CATEGORY));
+
+```
+上述RegistryDirectory是Directory的实现，Directory代表多个Invoker，可以把它看成List类型的Invoker，但与List不同的是，它的值可能是动态变化的，比如注册中心推送变更。
+
+RegistryDirectory内部含有两者重要属性：
+
+- 注册中心服务Registry registry
+- Protocol protocol。
+
+它会利用注册中心服务Registry registry来获取最新的服务器端注册的url地址，然后再利用协议Protocol protocol将这些url地址转换成一个具有远程通信功能的Invoker对象，如DubboInvoker
+
+- 然后使用Cluster cluster对象将上述多个Invoker对象（此时还没有真正创建出来，异步订阅，订阅成功之后，回调时才会创建出Invoker）聚合成一个集群版的Invoker对象。
+
+```Java
+Cluster cluster = ExtensionLoader.getExtensionLoader(Cluster.class).getAdaptiveExtension();
+
+cluster.join(directory)
+```
+
+这里再详细看看Cluster接口：
+
+```Java
+@SPI(FailoverCluster.NAME)
+public interface Cluster {
+
+    /**
+     * Merge the directory invokers to a virtual invoker.
+     * 
+     * @param <T>
+     * @param directory
+     * @return cluster invoker
+     * @throws RpcException
+     */
+    @Adaptive
+    <T> Invoker<T> join(Directory<T> directory) throws RpcException;
+
+}
+```
+
+只有一个功能就是把上述Directory（相当于一个List类型的Invoker）聚合成一个Invoker，同时也可以对List进行过滤处理（这些过滤操作也是配置在注册中心的）等实现路由的功能，主要是对用户进行透明。看看接口实现情况：
+
+![示意图](/img/12080157_wsju.png)
+
+默认采用的是FailoverCluster，看下FailoverCluster：
+
+```Java
+/**
+ * 失败转移，当出现失败，重试其它服务器，通常用于读操作，但重试会带来更长延迟。 
+ * 
+ * <a href="http://en.wikipedia.org/wiki/Failover">Failover</a>
+ * 
+ * @author william.liangf
+ */
+public class FailoverCluster implements Cluster {
+
+    public final static String NAME = "failover";
+
+    public <T> Invoker<T> join(Directory<T> directory) throws RpcException {
+        return new FailoverClusterInvoker<T>(directory);
+    }
+
+}
+```
+
+仅仅是创建了一个FailoverClusterInvoker，具体的逻辑留在调用的时候即调用该Invoker的invoke(final Invocation invocation)方法时来进行处理。其中又会涉及到另一个接口LoadBalance（从众多的Invoker中挑选出一个Invoker来执行此次调用任务），接口如下：
+
+```Java
+@SPI(RandomLoadBalance.NAME)
+public interface LoadBalance {
+
+    /**
+     * select one invoker in list.
+     * 
+     * @param invokers invokers.
+     * @param url refer url
+     * @param invocation invocation.
+     * @return selected invoker.
+     */
+    @Adaptive("loadbalance")
+    <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException;
+
+}
+```
+
+实现情况如下：
+
+![示意图](/img/12082143_bWmp.png)
+
+默认采用的是随机策略，具体的内容就请各自详细去研究。
+
+#### ProxyFactory概念
+
+前一篇文章已经讲过了，对于server端，ProxyFactory主要负责将服务如HelloServiceImpl统一进行包装成一个Invoker，这些Invoker通过反射来执行具体的HelloServiceImpl对象的方法。而对于client端，则是将上述创建的集群版Invoker创建出代理对象。
+
+接口定义如下：
+
+```Java
+@SPI("javassist")
+public interface ProxyFactory {
+    // 针对client端，对Invoker对象创建出代理对象
+    @Adaptive({"proxy"})
+    <T> T getProxy(Invoker<T> var1) throws RpcException;
+
+    // 针对server端，将服务对象如HelloServiceImpl包装成一个Invoker对象
+    @Adaptive({"proxy"})
+    <T> Invoker<T> getInvoker(T var1, Class<T> var2, URL var3) throws RpcException;
+}
+```
+
+ProxyFactory的接口实现有JdkProxyFactory、JavassistProxyFactory，默认是JavassistProxyFactory， JdkProxyFactory内容如下：
+
+```Java
+public <T> T getProxy(Invoker<T> invoker, Class<?>[] interfaces) {
+    return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), interfaces, new InvokerInvocationHandler(invoker));
+}
+```
+
+可以看到是利用jdk自带的Proxy来动态代理目标对象Invoker。所以我们调用创建出来的代理对象如HelloService helloService的方法时，会执行InvokerInvocationHandler中的逻辑：
+
+```Java
+public class InvokerInvocationHandler implements InvocationHandler {
+
+    private final Invoker<?> invoker;
+    
+    public InvokerInvocationHandler(Invoker<?> handler){
+        this.invoker = handler;
+    }
+
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        String methodName = method.getName();
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        if (method.getDeclaringClass() == Object.class) {
+            return method.invoke(invoker, args);
+        }
+        if ("toString".equals(methodName) && parameterTypes.length == 0) {
+            return invoker.toString();
+        }
+        if ("hashCode".equals(methodName) && parameterTypes.length == 0) {
+            return invoker.hashCode();
+        }
+        if ("equals".equals(methodName) && parameterTypes.length == 1) {
+            return invoker.equals(args[0]);
+        }
+        return invoker.invoke(new RpcInvocation(method, args)).recreate();
+    }
+
+}
+```
+
+可以看到还是交给目标对象Invoker来执行。
 
