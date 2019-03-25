@@ -608,3 +608,28 @@ ExtensionFactory objectFactory = AdaptiveExtensionFactory（适配类）
 Class<?> type = interface T
 ExtensionFactory objectFactory = AdaptiveExtensionFactory（适配类）
     factories = [SpringExtensionFactory实例, SpiExtensionFactory实例]
+
+
+第二点：ExtensionLoader<T>.getAdaptiveExtension()的调用层级
+
+ExtensionLoader<T>.getAdaptiveExtension()
+--createAdaptiveExtension()
+----injectExtension(getAdaptiveExtensionClass())
+------getAdaptiveExtensionClass()
+--------getExtensionClasses()//从spi文件中查找实现类上具有@Adaptive注解的类
+----------loadExtensionClasses()
+------------loadFile(Map<String, Class<?>> extensionClasses, String dir)
+--------createAdaptiveExtensionClass()//如果从spi文件中没有找到实现类上具有@Adaptive注解的类，则动态创建类
+
+最终返回的是创建好的Adaptive类，例如AdaptiveExtensionFactory实例。
+
+第三点：ExtensionLoader<T>.getExtension()的调用层级
+
+ExtensionLoader<T>.getExtension()
+--createExtension(String name)
+----getExtensionClasses().get(name)//获取扩展类
+----injectExtension(instance);//ioc
+----wrapper包装;//aop
+
+最终返回的是创建好的具体实现类，例如SpringExtensionFactory实例。 
+
