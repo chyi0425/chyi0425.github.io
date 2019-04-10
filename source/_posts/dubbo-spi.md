@@ -251,12 +251,211 @@ public interface ExtensionFactory {
 来看createAdaptiveExtension()创建AdaptiveExtension的源码：
 
 ```Java
+    /**
+     *createAdaptiveExtension()
+     *--getAdaptiveExtensionClass()
+     *从dubbo-spi配置文件中获取AdaptiveExtensionClass
+     *----getExtensionClasses()
+     *------loadExtensionClasses()
+     *--------loadFile(Map<String, Class<?>> extensionClasses, String dir)
+     * 创建动态代理类
+     *----createAdaptiveExtensionClass()
+     *injectExtension()
+     */
     @SuppressWarnings("unchecked")
     private T createAdaptiveExtension() {
         try {
             return injectExtension((T) getAdaptiveExtensionClass().newInstance());
         } catch (Exception e) {
             throw new IllegalStateException("Can not create adaptive extension " + type + ", cause: " + e.getMessage(), e);
+        }
+    }
+```
+
+调用层级看注释。injectExtension(T instance)方法只对objectFactory有用，如果objectFactory==null，则直接返回T instance。所以这里返回的是getAdaptiveExtensionClass().newInstance()
+
+来看getAdaptiveExtensionClass()的源码：
+
+```Java
+    private Class<?> getAdaptiveExtensionClass() {
+        getExtensionClasses();
+        if (cachedAdaptiveClass != null) {
+            return cachedAdaptiveClass;
+        }
+        return cachedAdaptiveClass = createAdaptiveExtensionClass();
+    }
+```
+
+现在来看getExtensionClasses()：
+
+```Java
+    
+    private Map<String, Class<?>> getExtensionClasses() {
+        // 先从cachedClasses缓存中获取所有的ExtensionClass,如果有,直接返回;
+        Map<String, Class<?>> classes = cachedClasses.get();
+        if (classes == null) {
+            synchronized (cachedClasses) {
+                classes = cachedClasses.get();
+                if (classes == null) {
+                    // 如果没有,通过loadExtensionClasses()从SPI文件中去读取,之后写入缓存
+                    classes = loadExtensionClasses();
+                    cachedClasses.set(classes);
+                }
+            }
+        }
+        return classes;
+    }
+```
+
+现在来看loadExtensionClasses()
+
+
+```Java
+    // synchronized in getExtensionClasses
+    private Map<String, Class<?>> loadExtensionClasses() {
+        final SPI defaultAnnotation = type.getAnnotation(SPI.class);
+        if (defaultAnnotation != null) {
+            String value = defaultAnnotation.value();
+            if (value != null && (value = value.trim()).length() > 0) {
+                String[] names = NAME_SEPARATOR.split(value);
+                if (names.length > 1) {
+                    throw new IllegalStateException("more than 1 default extension name on extension " + type.getName()
+                            + ": " + Arrays.toString(names));
+                }
+                // 从@SPI注解中将默认值解析出来,并缓存到cachedDefaultName中
+                if (names.length == 1) cachedDefaultName = names[0];
+            }
+        }
+        //从SPI文件中获取extensionClass并存储到extensionClasses中,最后返回extensionClasses
+        Map<String, Class<?>> extensionClasses = new HashMap<String, Class<?>>();
+        loadFile(extensionClasses, DUBBO_INTERNAL_DIRECTORY);
+        loadFile(extensionClasses, DUBBO_DIRECTORY);
+        loadFile(extensionClasses, SERVICES_DIRECTORY);
+        return extensionClasses;
+    }
+```
+
+之后来看一下非常重要的一个方法loadFile(Map<String, Class<?>> extensionClasses, String dir)。
+
+```Java
+    /**
+    * 1 加载dir目录下的指定type名称的文件(例如:dubbo-2.5.5.jar中的/META-INF/dubbo/internal/com.alibaba.dubbo.common.extension.ExtensionFactory)
+    * 2 遍历该文件中的每一行
+    * (1)获取实现类key和value, 例如 name=spi, line=com.alibaba.dubbo.common.extension.factory.SpiExtensionFactory
+    * (2)根据line创建Class对象
+    * (3)将具有@Adaptive注解的实现类的Class对象放在cachedAdaptiveClass缓存中, 注意该缓存只能存放一个具有@Adaptive注解的实现类的Class对象,如果有两个满足条件,则抛异常
+    * 下面的都是对不含@Adaptive注解的实现类的Class对象:
+    * (4)查看是否具有含有一个type入参的构造器, 如果有（就是wrapper类）, 将当前的Class对象放置到cachedWrapperClasses缓存中
+    * (5)如果没有含有一个type入参的构造器, 获取无参构造器. 如果Class对象具有@Active注解, 将该对象以<实现类的key, active>存储起来
+    * (6)最后,将<Class对象, 实现类的key>存入cachedNames缓存,并将这些Class存入extensionClasses中.
+    * @param extensionClasses
+    * @param dir
+    */
+    private void loadFile(Map<String, Class<?>> extensionClasses, String dir) {
+        String fileName = dir + type.getName();
+        try {
+            Enumeration<java.net.URL> urls;
+            ClassLoader classLoader = findClassLoader();
+            if (classLoader != null) {
+                urls = classLoader.getResources(fileName);
+            } else {
+                urls = ClassLoader.getSystemResources(fileName);
+            }
+            if (urls != null) {
+                while (urls.hasMoreElements()) {
+                    java.net.URL url = urls.nextElement();
+                    try {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream(), "utf-8"));
+                        try {
+                            String line = null;
+                            while ((line = reader.readLine()) != null) {
+                                final int ci = line.indexOf('#');
+                                if (ci >= 0) line = line.substring(0, ci);
+                                line = line.trim();
+                                if (line.length() > 0) {
+                                    try {
+                                        String name = null;
+                                        int i = line.indexOf('=');
+                                        if (i > 0) {
+                                            name = line.substring(0, i).trim();
+                                            line = line.substring(i + 1).trim();
+                                        }
+                                        if (line.length() > 0) {
+                                            Class<?> clazz = Class.forName(line, true, classLoader);
+                                            if (!type.isAssignableFrom(clazz)) {
+                                                throw new IllegalStateException("Error when load extension class(interface: " +
+                                                        type + ", class line: " + clazz.getName() + "), class "
+                                                        + clazz.getName() + "is not subtype of interface.");
+                                            }
+                                            if (clazz.isAnnotationPresent(Adaptive.class)) {
+                                                if (cachedAdaptiveClass == null) {
+                                                    cachedAdaptiveClass = clazz;
+                                                } else if (!cachedAdaptiveClass.equals(clazz)) {
+                                                    throw new IllegalStateException("More than 1 adaptive class found: "
+                                                            + cachedAdaptiveClass.getClass().getName()
+                                                            + ", " + clazz.getClass().getName());
+                                                }
+                                            } else {
+                                                try {
+                                                    clazz.getConstructor(type);
+                                                    Set<Class<?>> wrappers = cachedWrapperClasses;
+                                                    if (wrappers == null) {
+                                                        cachedWrapperClasses = new ConcurrentHashSet<Class<?>>();
+                                                        wrappers = cachedWrapperClasses;
+                                                    }
+                                                    wrappers.add(clazz);
+                                                } catch (NoSuchMethodException e) {
+                                                    clazz.getConstructor();
+                                                    if (name == null || name.length() == 0) {
+                                                        name = findAnnotationName(clazz);
+                                                        if (name == null || name.length() == 0) {
+                                                            if (clazz.getSimpleName().length() > type.getSimpleName().length()
+                                                                    && clazz.getSimpleName().endsWith(type.getSimpleName())) {
+                                                                name = clazz.getSimpleName().substring(0, clazz.getSimpleName().length() - type.getSimpleName().length()).toLowerCase();
+                                                            } else {
+                                                                throw new IllegalStateException("No such extension name for the class " + clazz.getName() + " in the config " + url);
+                                                            }
+                                                        }
+                                                    }
+                                                    String[] names = NAME_SEPARATOR.split(name);
+                                                    if (names != null && names.length > 0) {
+                                                        Activate activate = clazz.getAnnotation(Activate.class);
+                                                        if (activate != null) {
+                                                            cachedActivates.put(names[0], activate);
+                                                        }
+                                                        for (String n : names) {
+                                                            if (!cachedNames.containsKey(clazz)) {
+                                                                cachedNames.put(clazz, n);
+                                                            }
+                                                            Class<?> c = extensionClasses.get(n);
+                                                            if (c == null) {
+                                                                extensionClasses.put(n, clazz);
+                                                            } else if (c != clazz) {
+                                                                throw new IllegalStateException("Duplicate extension " + type.getName() + " name " + n + " on " + c.getName() + " and " + clazz.getName());
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable t) {
+                                        IllegalStateException e = new IllegalStateException("Failed to load extension class(interface: " + type + ", class line: " + line + ") in " + url + ", cause: " + t.getMessage(), t);
+                                        exceptions.put(line, e);
+                                    }
+                                }
+                            } // end of while read lines
+                        } finally {
+                            reader.close();
+                        }
+                    } catch (Throwable t) {
+                        logger.error("Exception when load extension class(interface: " +
+                                type + ", class file: " + url + ") in " + url, t);
+                    }
+                } // end of while urls
+            }
+        } catch (Throwable t) {
+            logger.error("Exception when load extension class(interface: " +
+                    type + ", description file: " + fileName + ").", t);
         }
     }
 ```
