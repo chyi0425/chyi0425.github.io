@@ -277,6 +277,14 @@ public interface ExtensionFactory {
 来看getAdaptiveExtensionClass()的源码：
 
 ```Java
+<<<<<<< HEAD
+=======
+    /**
+     * 获取ExtensionClasses和适配类
+     * 如果实现类上带有@Adaptive注解，直接创建修饰类
+     * 如果方法上带有@Adaptive注解，动态生成代理类
+     */
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
     private Class<?> getAdaptiveExtensionClass() {
         getExtensionClasses();
         if (cachedAdaptiveClass != null) {
@@ -285,6 +293,7 @@ public interface ExtensionFactory {
         return cachedAdaptiveClass = createAdaptiveExtensionClass();
     }
 ```
+<<<<<<< HEAD
 
 现在来看getExtensionClasses()：
 
@@ -292,12 +301,24 @@ public interface ExtensionFactory {
     
     private Map<String, Class<?>> getExtensionClasses() {
         // 先从cachedClasses缓存中获取所有的ExtensionClass,如果有,直接返回;
+=======
+现在来看getExtensionClasses()
+```Java
+    /**
+     * 先从cachedClasses缓存中获取所有的ExtensionClass,如果有,直接返回;
+     * 如果没有,通过loadExtensionClasses()从SPI文件中去读取,之后写入缓存
+     */
+    private Map<String, Class<?>> getExtensionClasses() {
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
         Map<String, Class<?>> classes = cachedClasses.get();
         if (classes == null) {
             synchronized (cachedClasses) {
                 classes = cachedClasses.get();
                 if (classes == null) {
+<<<<<<< HEAD
                     // 如果没有,通过loadExtensionClasses()从SPI文件中去读取,之后写入缓存
+=======
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
                     classes = loadExtensionClasses();
                     cachedClasses.set(classes);
                 }
@@ -307,11 +328,22 @@ public interface ExtensionFactory {
     }
 ```
 
+<<<<<<< HEAD
 现在来看loadExtensionClasses()
 
 
 ```Java
     // synchronized in getExtensionClasses
+=======
+现在来看loadExtensionClasses
+
+```Java
+    /**
+     * 1 从@SPI注解中将默认值解析出来,并缓存到cachedDefaultName中
+     * 2 从SPI文件中获取extensionClass并存储到extensionClasses中,最后返回extensionClasses
+     * 注意：此方法已经getExtensionClasses方法同步过。
+     */
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
     private Map<String, Class<?>> loadExtensionClasses() {
         final SPI defaultAnnotation = type.getAnnotation(SPI.class);
         if (defaultAnnotation != null) {
@@ -322,11 +354,18 @@ public interface ExtensionFactory {
                     throw new IllegalStateException("more than 1 default extension name on extension " + type.getName()
                             + ": " + Arrays.toString(names));
                 }
+<<<<<<< HEAD
                 // 从@SPI注解中将默认值解析出来,并缓存到cachedDefaultName中
                 if (names.length == 1) cachedDefaultName = names[0];
             }
         }
         //从SPI文件中获取extensionClass并存储到extensionClasses中,最后返回extensionClasses
+=======
+                if (names.length == 1) cachedDefaultName = names[0];
+            }
+        }
+
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
         Map<String, Class<?>> extensionClasses = new HashMap<String, Class<?>>();
         loadFile(extensionClasses, DUBBO_INTERNAL_DIRECTORY);
         loadFile(extensionClasses, DUBBO_DIRECTORY);
@@ -335,6 +374,7 @@ public interface ExtensionFactory {
     }
 ```
 
+<<<<<<< HEAD
 之后来看一下非常重要的一个方法loadFile(Map<String, Class<?>> extensionClasses, String dir)。
 
 ```Java
@@ -351,6 +391,24 @@ public interface ExtensionFactory {
     * @param extensionClasses
     * @param dir
     */
+=======
+之后来看下非常重要的一个方法loadFile(Map<String,Class<?>> extensionClasses,String dir)
+
+```Java
+    /**
+     * 1 加载dir目录下的指定type名称的文件(例如:dubbo-2.5.5.jar中的/META-INF/dubbo/internal/com.alibaba.dubbo.common.extension.ExtensionFactory)
+     * 2 遍历该文件中的每一行
+     * (1)获取实现类key和value, 例如 name=spi, line=com.alibaba.dubbo.common.extension.factory.SpiExtensionFactory
+     * (2)根据line创建Class对象
+     * (3)将具有@Adaptive注解的实现类的Class对象放在cachedAdaptiveClass缓存中, 注意该缓存只能存放一个具有@Adaptive注解的实现类的Class对象,如果有两个满足条件,则抛异常
+     * 下面的都是对不含@Adaptive注解的实现类的Class对象:
+     * (4)查看是否具有含有一个type入参的构造器, 如果有（就是wrapper类）, 将当前的Class对象放置到cachedWrapperClasses缓存中
+     * (5)如果没有含有一个type入参的构造器, 获取无参构造器. 如果Class对象具有@Active注解, 将该对象以<实现类的key, active>存储起来
+     * (6)最后,将<Class对象, 实现类的key>存入cachedNames缓存,并将这些Class存入extensionClasses中.
+     * @param extensionClasses
+     * @param dir
+     */
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
     private void loadFile(Map<String, Class<?>> extensionClasses, String dir) {
         String fileName = dir + type.getName();
         try {
@@ -458,4 +516,187 @@ public interface ExtensionFactory {
                     type + ", description file: " + fileName + ").", t);
         }
     }
+<<<<<<< HEAD
 ```
+=======
+```
+
+上述的方法分别从三个目录查找SPI文件并进行加载。在这里只有在META-INF/dubbo/internal/com.alibaba.dubbo.common.extension.ExtensionFactory中有值，内容如下：
+
+```propertites
+1 adaptive=com.alibaba.dubbo.common.extension.factory.AdaptiveExtensionFactory
+2 spi=com.alibaba.dubbo.common.extension.factory.SpiExtensionFactory
+3 spring=com.alibaba.dubbo.config.spring.extension.SpringExtensionFactory
+```
+
+其中AdaptiveExtensionFactory在类上具有@Adaptive注解，这个类会在后续去讲，这里先略过。
+
+执行过后，看一下：
+```Java
+cachedAdaptiveClass=class com.alibaba.dubbo.common.extension.factory.AdaptiveExtensionFactory
+extensionClasses=[{"spring","class com.alibaba.dubbo.config.spring.extension.SpringExtensionFactory"}, {"spi", "class com.alibaba.dubbo.common.extension.factory.SpiExtensionFactory"}]，后续会这个集合存储在cachedClasses缓存中。
+```
+上边一直在讲解getAdaptiveExtensionClass().newInstance()这句代码中的getAdaptiveExtensionClass()，此方法返回一个com.alibaba.dubbo.common.extension.factory.AdaptiveExtensionFactory类，之后来看一下其newInstance()代码，调用这个方法，默认会执行AdaptiveExtensionFactory的无参构造器。这里给出AdaptiveExtensionFactory的完整代码：
+
+```Java
+package com.alibaba.dubbo.common.extension.factory;
+
+import com.alibaba.dubbo.common.extension.Adaptive;
+import com.alibaba.dubbo.common.extension.ExtensionFactory;
+import com.alibaba.dubbo.common.extension.ExtensionLoader;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * AdaptiveExtensionFactory
+ */
+@Adaptive
+public class AdaptiveExtensionFactory implements ExtensionFactory {
+    private final List<ExtensionFactory> factories;
+
+    /**
+     * 遍历cachedClasses中缓存的extensionClasses的key,之后根据key来实例化对应的实现类,最后放置到EXTENSION_INSTANCES缓存中
+     */
+    public AdaptiveExtensionFactory() {
+        ExtensionLoader<ExtensionFactory> loader = ExtensionLoader.getExtensionLoader(ExtensionFactory.class);
+        List<ExtensionFactory> list = new ArrayList<ExtensionFactory>();
+        for (String name : loader.getSupportedExtensions()) {
+            list.add(loader.getExtension(name));
+        }
+        factories = Collections.unmodifiableList(list);
+    }
+
+    public <T> T getExtension(Class<T> type, String name) {
+        for (ExtensionFactory factory : factories) {
+            T extension = factory.getExtension(type, name);
+            if (extension != null) {
+                return extension;
+            }
+        }
+        return null;
+    }
+}
+```
+
+从上可以看出，这个装饰类只是实例化好了各个ExtensionFactory（这里是SpiExtensionFactory和SpringExtensionFactory），后续通过工厂获取实现类实例都是由具体工厂来完成。
+
+来看一下实例化代码的地方，即loader.getExtension(name)：
+
+```Java
+    /**
+     * 从cachedInstances缓存中获取name对应的实例,如果没有,通过createExtension(name)创建,之后放入缓存
+     * getExtension(String name)
+     * --createExtension(String name)
+     * ----injectExtension(T instance)
+     */
+    public T getExtension(String name) {
+        if (name == null || name.length() == 0)
+            throw new IllegalArgumentException("Extension name == null");
+        if ("true".equals(name)) {
+            return getDefaultExtension();
+        }
+        Holder<Object> holder = cachedInstances.get(name);
+        if (holder == null) {
+            cachedInstances.putIfAbsent(name, new Holder<Object>());
+            holder = cachedInstances.get(name);
+        }
+        Object instance = holder.get();
+        if (instance == null) {
+            synchronized (holder) {
+                instance = holder.get();
+                if (instance == null) {
+                    instance = createExtension(name);
+                    holder.set(instance);
+                }
+            }
+        }
+        return (T) instance;
+    }
+```
+
+来看一下创建createExtension(name)：
+
+```Java
+private T createExtension(String name) {
+        /** 从cachedClasses缓存中获取所有的实现类map,之后通过name获取到对应的实现类的Class对象 */
+        Class<?> clazz = getExtensionClasses().get(name);
+        if (clazz == null) {
+            throw findException(name);
+        }
+        try {
+            /** 从EXTENSION_INSTANCES缓存中获取对应的实现类的Class对象,如果没有,直接创建,之后放入缓存 */
+            T instance = (T) EXTENSION_INSTANCES.get(clazz);
+            if (instance == null) {
+                EXTENSION_INSTANCES.putIfAbsent(clazz, (T) clazz.newInstance());
+                instance = (T) EXTENSION_INSTANCES.get(clazz);
+            }
+            injectExtension(instance);//ioc
+            Set<Class<?>> wrapperClasses = cachedWrapperClasses;
+            if (wrapperClasses != null && wrapperClasses.size() > 0) {
+                for (Class<?> wrapperClass : wrapperClasses) {
+                    instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
+                }
+            }
+            return instance;
+        } catch (Throwable t) {
+            throw new IllegalStateException("Extension instance(name: " + name + ", class: " +
+                    type + ")  could not be instantiated: " + t.getMessage(), t);
+        }
+    }
+```
+
+这里，就体现出来了dubbo-SPI比JDK-SPI的好处：dubbo-SPI不需要遍历所有的实现类来获取想要的实现类，可以直接通过name来获取。
+
+injectExtension(instance)和wrapper包装功能后续再说。
+
+ 
+
+到此为止，ExtensionLoader<Protocol> loader = ExtensionLoader.getExtensionLoader(Protocol.class);这行代码的整个源码就讲述完成了。最后来看一下整个代码的执行结果。
+
+类变量
+
+ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS
+    "interface com.alibaba.dubbo.rpc.Protocol" -> "com.alibaba.dubbo.common.extension.ExtensionLoader[com.alibaba.dubbo.rpc.Protocol]"
+    "interface com.alibaba.dubbo.common.extension.ExtensionFactory" -> "com.alibaba.dubbo.common.extension.ExtensionLoader[com.alibaba.dubbo.common.extension.ExtensionFactory]"
+ConcurrentMap<Class<?>, Object> EXTENSION_INSTANCES
+    "class com.alibaba.dubbo.config.spring.extension.SpringExtensionFactory" -> SpringExtensionFactory实例
+    "class com.alibaba.dubbo.common.extension.factory.SpiExtensionFactory" -> SpiExtensionFactory实例
+ExtensionLoader<Protocol> loader的实例变量：
+
+Class<?> type = interface com.alibaba.dubbo.rpc.Protocol
+ExtensionFactory objectFactory = AdaptiveExtensionFactory（适配类）
+    factories = [SpringExtensionFactory实例, SpiExtensionFactory实例]
+
+第一点：ExtensionLoader<T> loader = ExtensionLoader.getExtensionLoader(Class<T> type)最终得到的实例变量是：
+
+Class<?> type = interface T
+ExtensionFactory objectFactory = AdaptiveExtensionFactory（适配类）
+    factories = [SpringExtensionFactory实例, SpiExtensionFactory实例]
+
+
+第二点：ExtensionLoader<T>.getAdaptiveExtension()的调用层级
+
+ExtensionLoader<T>.getAdaptiveExtension()
+--createAdaptiveExtension()
+----injectExtension(getAdaptiveExtensionClass())
+------getAdaptiveExtensionClass()
+--------getExtensionClasses()//从spi文件中查找实现类上具有@Adaptive注解的类
+----------loadExtensionClasses()
+------------loadFile(Map<String, Class<?>> extensionClasses, String dir)
+--------createAdaptiveExtensionClass()//如果从spi文件中没有找到实现类上具有@Adaptive注解的类，则动态创建类
+
+最终返回的是创建好的Adaptive类，例如AdaptiveExtensionFactory实例。
+
+第三点：ExtensionLoader<T>.getExtension()的调用层级
+
+ExtensionLoader<T>.getExtension()
+--createExtension(String name)
+----getExtensionClasses().get(name)//获取扩展类
+----injectExtension(instance);//ioc
+----wrapper包装;//aop
+
+最终返回的是创建好的具体实现类，例如SpringExtensionFactory实例。 
+
+>>>>>>> 291712022f23203bfaa774b21cc7d9602f88c4e6
